@@ -1,0 +1,3409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prep for AIR-1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Firebase SDK v10 (modular, CDN) -->
+<script type="module">
+  // ═══════════════════════════════════════════════════════════════════
+  // STEP 1: Paste YOUR Firebase project config here.
+  //         Go to: Firebase Console → Your Project → Project Settings
+  //         → "Your apps" → Config (the firebaseConfig object).
+  //         Replace every value below with yours.
+  // ═══════════════════════════════════════════════════════════════════
+  const FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyDAHtCawwdZt90zbygH_M4nG0nJ4JnQAnU",
+    authDomain:        "prepforair1.firebaseapp.com",
+    projectId:         "prepforair1",
+    storageBucket:     "prepforair1.firebasestorage.app",
+    messagingSenderId: "1045018568021",
+    appId:             "1:1045018568021:web:7b623269dad3489838fbdc",
+    measurementId:     "G-HDNXPVGNPE"
+  };
+
+  import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+  // Only initialise if the user has filled in real config values.
+  const isConfigured = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('PASTE');
+
+  let db = null;
+  if(isConfigured){
+    try{
+      const app = initializeApp(FIREBASE_CONFIG);
+      db = getFirestore(app);
+      // Enable offline persistence so saves still work when no internet.
+      enableIndexedDbPersistence(db).catch(()=>{});
+    }catch(e){
+      console.warn('Firebase init failed', e);
+    }
+  }
+
+  // Document path in Firestore: users/{USER_ID}/tracker
+  // STEP 2: You can change "priyanshu" below to any word you like.
+  //         It's just an identifier for your data document.
+  const DOC_PATH = 'users/priyanshu/tracker';
+  const LS_KEY   = 'prep-register-data';       // local backup key
+
+  function setSyncBadge(state){
+    // state: 'synced' | 'saving' | 'offline' | 'local'
+    const badge = document.getElementById('syncBadge');
+    if(!badge) return;
+    const map = {
+      synced:  { text: '☁ Synced',  cls: 'badge-synced'  },
+      saving:  { text: '↑ Saving…', cls: 'badge-saving'  },
+      offline: { text: '⚠ Offline', cls: 'badge-offline' },
+      local:   { text: '💾 Local',  cls: 'badge-local'   },
+    };
+    const cfg = map[state] || map.local;
+    badge.textContent = cfg.text;
+    badge.className   = 'sync-badge ' + cfg.cls;
+  }
+
+  // Expose a storage object that the rest of the app uses.
+  window.appStorage = {
+    async get(key){
+      // Try Firestore first; fall back to localStorage.
+      if(db){
+        try{
+          const snap = await getDoc(doc(db, DOC_PATH));
+          if(snap.exists()){
+            const val = snap.data()[key];
+            if(val !== undefined){
+              // Keep localStorage in sync as offline cache.
+              try{ localStorage.setItem(LS_KEY, val); }catch(_){}
+              setSyncBadge('synced');
+              return val;
+            }
+          }
+        }catch(e){
+          console.warn('Firestore read failed, using localStorage', e);
+          setSyncBadge('offline');
+        }
+      } else {
+        setSyncBadge('local');
+      }
+      // Fallback: localStorage
+      return localStorage.getItem(LS_KEY);
+    },
+    async set(key, value){
+      // Always write to localStorage immediately (instant, offline-safe).
+      try{ localStorage.setItem(LS_KEY, value); }catch(_){}
+      // Then push to Firestore if configured.
+      if(db){
+        setSyncBadge('saving');
+        try{
+          await setDoc(doc(db, DOC_PATH), { [key]: value }, { merge: true });
+          setSyncBadge('synced');
+        }catch(e){
+          console.warn('Firestore write failed (will retry when online)', e);
+          setSyncBadge('offline');
+        }
+      } else {
+        setSyncBadge('local');
+      }
+    }
+  };
+</script>
+<style>
+  :root{
+    --bg: #0A0B10;
+    --surface: #1E212C;
+    --surface-alt: #262A38;
+    --border: #363A4C;
+    --ink: #EDEEF3;
+    --ink-soft: #9CA0B3;
+    --ink-faint: #6B6F82;
+    --primary: #7C6FF2;
+    --primary-hover: #6A5CE0;
+    --primary-soft: #262244;
+    --accent: #F5A623;
+    --accent-soft: #332B14;
+    --success: #34C374;
+    --success-soft: #16301F;
+    --danger: #F04747;
+    --danger-soft: #3A1B1B;
+    --blue: #4FA3F7;
+    --yellow: #E8D44D;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 10px 30px rgba(0,0,0,0.35);
+  }
+  body[data-theme="light"]{
+    --bg: #F5F6FB;
+    --surface: #FFFFFF;
+    --surface-alt: #EEF0F8;
+    --border: #E1E4EF;
+    --ink: #14151F;
+    --ink-soft: #676B7E;
+    --ink-faint: #9CA0B3;
+    --primary: #4338CA;
+    --primary-hover: #372DB0;
+    --primary-soft: #ECEBFC;
+    --accent: #C97F0A;
+    --accent-soft: #FFF1D6;
+    --success: #16A34A;
+    --success-soft: #E7F8ED;
+    --danger: #DC2626;
+    --danger-soft: #FCEAEA;
+    --blue: #2563EB;
+    --yellow: #B58900;
+    --shadow: 0 1px 2px rgba(20,21,31,0.04), 0 10px 30px rgba(20,21,31,0.07);
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 32px 18px 60px;
+    -webkit-font-smoothing: antialiased;
+    transition: background .2s ease, color .2s ease;
+  }
+  .wrap{ max-width: 900px; margin: 0 auto; }
+
+  /* ---- Top bar ---- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 26px; flex-wrap: wrap; }
+
+  /* ---- Mission banner ---- */
+  .mission-banner{
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    text-align:center; flex-wrap:wrap;
+    background: linear-gradient(135deg, var(--primary-soft), var(--surface-alt));
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px 20px; margin-bottom: 20px; box-shadow: var(--shadow);
+  }
+  .mission-banner .mission-main{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .mission-banner .mission-tag{
+    font-family:'Sora', sans-serif; font-weight:800; font-size:14px; letter-spacing:0.5px;
+    color: var(--primary);
+  }
+  .mission-banner .mission-detail{
+    font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--ink-soft); letter-spacing:0.2px;
+  }
+  .mission-banner .mission-quote{
+    font-family:'Inter', sans-serif; font-size:12.5px; font-style:italic; color: var(--ink-faint);
+    width:100%; margin-top:2px;
+  }
+
+  /* ---- Dashboard ---- */
+  .dash-header{ margin-bottom: 18px; }
+  .dash-header .dash-name{
+    font-family:'Sora', sans-serif; font-weight:800; font-size: 21px; letter-spacing:0.2px; color: var(--ink);
+  }
+  .dash-header .dash-sub{
+    font-family:'JetBrains Mono', monospace; font-size:11.5px; color: var(--ink-soft); letter-spacing:0.4px;
+    margin-top:5px; text-transform:uppercase;
+  }
+  .dash-insight-row{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--surface-alt); font-size:13.5px; gap:12px; }
+  .dash-insight-row:last-child{ border-bottom:none; }
+  .dash-insight-row .lbl{ color: var(--ink-soft); }
+  .dash-insight-row .val{ font-family:'Sora', sans-serif; font-weight:700; color: var(--ink); text-align:right; }
+  .dash-insight-row.tone-gap .val{ color: var(--danger); }
+  .dash-insight-row.tone-strength .val{ color: var(--success); }
+  .dash-insight-row.tone-priority .val{ color: var(--primary); }
+
+  /* ---- Today greeting ---- */
+  .today-greeting{ margin-bottom: 18px; }
+  .today-greeting .greeting-line1{
+    font-family:'Sora', sans-serif; font-weight:800; font-size: 27px; letter-spacing:-0.4px;
+    margin: 0 0 6px; color: var(--ink);
+  }
+  .today-greeting .greeting-line2{
+    font-family:'Inter', sans-serif; font-size: 14.5px; color: var(--ink-soft); margin:0;
+  }
+  .today-greeting .greeting-line2 strong{
+    font-family:'JetBrains Mono', monospace; font-weight:700; color: var(--accent); font-size:15px;
+  }
+  .today-status{
+    display:inline-block; font-family:'Inter', sans-serif; font-size:14px; font-weight:600;
+    padding:9px 14px; border-radius: var(--radius-sm); margin-top:8px;
+  }
+  .today-status.tone-good{ color: var(--success); background: var(--success-soft); }
+  .today-status.tone-warn{ color: var(--danger); background: var(--danger-soft); }
+  .today-status.tone-info{ color: var(--primary); background: var(--primary-soft); }
+  .today-status.tone-neutral{ color: var(--ink-soft); background: var(--surface-alt); }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:auto; min-width:38px; height:38px; padding:0 10px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--primary), #6D5CF0);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-family:'Sora',sans-serif; font-weight:700; font-size:17px; letter-spacing:-0.5px; flex-shrink:0;
+  }
+  .brand h1{ font-family:'Sora', sans-serif; font-weight:700; font-size: 21px; margin:0; letter-spacing:-0.2px; }
+  .brand p{ margin:0; font-size:12.5px; color: var(--ink-soft); }
+  .countdown-chip{
+    display:flex; align-items:center; gap:10px;
+    background: var(--surface); border:1px solid var(--border); border-radius: 999px;
+    padding: 7px 8px 7px 16px; box-shadow: var(--shadow);
+  }
+  .countdown-chip .num{ font-family:'JetBrains Mono', monospace; font-weight:700; font-size:15px; color: var(--danger); }
+  .countdown-chip .lbl{ font-size:11.5px; color: var(--ink-soft); }
+  .countdown-chip input[type=date]{
+    border:none; background: var(--surface-alt); border-radius:999px; padding:6px 10px;
+    font-family:'Inter',sans-serif; font-size:11.5px; color: var(--ink-soft); width: 118px;
+  }
+
+  /* ---- Nav pills ---- */
+  .tabs{ display:flex; gap:4px; background: var(--surface-alt); padding:5px; border-radius: 14px; margin-bottom: 22px; overflow-x:auto; }
+  .tab{
+    font-family:'Sora', sans-serif; font-size: 13px; font-weight:600; color: var(--ink-soft);
+    padding: 9px 16px; border-radius: 10px; cursor:pointer; user-select:none; white-space:nowrap;
+    transition: background .15s ease, color .15s ease;
+  }
+  .tab.active{ background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+  .tab:hover:not(.active){ color: var(--ink); }
+  .panel{ display:block; }
+  .hidden{ display:none !important; }
+
+  .card{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 22px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  h2.section-title{ font-family:'Sora', sans-serif; font-size:15.5px; font-weight:700; margin: 0 0 4px; color: var(--ink); letter-spacing:-0.1px; }
+  .section-sub{ margin:0 0 16px; font-size:12.5px; color: var(--ink-soft); }
+  .card-head-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .mock-trend-stats{ display:flex; gap:18px; flex-wrap:wrap; margin:2px 0 10px; }
+  .mock-trend-stats .mts-item{ font-size:11.5px; color:var(--ink-soft); display:flex; align-items:baseline; gap:5px; }
+  .mock-trend-stats .mts-item b{ font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:700; color:var(--ink); }
+
+  /* ---- Mock analysis ---- */
+  .analysis-row{ border:1px solid var(--border); border-radius: var(--radius-md); margin-bottom:10px; overflow:hidden; background: var(--surface); }
+  .analysis-row-head{ display:flex; justify-content:space-between; align-items:center; padding:12px 15px; gap:10px; flex-wrap:wrap; }
+  .analysis-row-head .name{ font-family:'Sora',sans-serif; font-weight:600; font-size:13.5px; }
+  .analysis-row-head .meta{ font-size:11.5px; color:var(--ink-faint); }
+  .analysis-summary{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:11.5px; color:var(--ink-soft); }
+  .analysis-summary .acc-pill{ font-family:'JetBrains Mono', monospace; font-weight:700; padding:3px 9px; border-radius:999px; }
+  .analysis-tagchip{ font-size:10.5px; padding:2px 8px; border-radius:999px; background: var(--surface-alt); color: var(--ink-soft); }
+  .analysis-form{ padding:4px 15px 16px; border-top:1px solid var(--surface-alt); }
+  .analysis-form .form-row{ margin-top:10px; }
+  .analysis-form label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; color: var(--ink-faint); display:block; margin-bottom:4px; }
+  .analysis-field{ display:flex; flex-direction:column; }
+  .analysis-field input{ width:88px; }
+  .reason-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-top:12px; }
+  .reason-field{ background: var(--surface-alt); border-radius: var(--radius-sm); padding:8px 10px; }
+  .reason-field label{ margin-bottom:5px; }
+  .reason-field input{ width:100%; }
+  .reason-field.concept label{ color:#F04747; } .reason-field.silly label{ color:#F5A623; }
+  .reason-field.guess label{ color:#4FA3F7; } .reason-field.time label{ color:#34C374; }
+  .reason-bar-wrap{ display:flex; height:14px; border-radius:7px; overflow:hidden; margin:10px 0 8px; background: var(--surface-alt); }
+  .reason-bar-seg{ height:100%; }
+  .reason-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color: var(--ink-soft); margin-bottom:16px; }
+  .reason-legend span{ display:flex; align-items:center; gap:5px; }
+  .reason-legend i{ width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+  select, input[type=text], input[type=number], input[type=date]{
+    font-family:'Inter', sans-serif; font-size: 13.5px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--ink);
+  }
+  select:focus, input:focus{ outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  input[type=date]{ color-scheme: dark; }
+  input[type=date]::-webkit-calendar-picker-indicator{ cursor: pointer; opacity: 0.85; }
+  input[type=date]::-webkit-calendar-picker-indicator:hover{ opacity: 1; }
+  body[data-theme="light"] input[type=date]{ color-scheme: light; }
+  body[data-theme="light"] input[type=date]::-webkit-calendar-picker-indicator{ filter: none; opacity: 0.7; }
+  body[data-theme="light"] input[type=date]::-webkit-calendar-picker-indicator:hover{ opacity: 1; }
+  button{ font-family:'Sora', sans-serif; font-size: 13px; font-weight:600; padding: 10px 16px; border-radius: var(--radius-sm); border: none; cursor:pointer; }
+  button:focus-visible{ outline: 2px solid var(--primary); outline-offset:2px; }
+  .btn-primary{ background: var(--primary); color: #fff; }
+  .btn-primary:hover{ background: var(--primary-hover); }
+  .btn-ghost{ background: var(--surface-alt); color: var(--ink); }
+  .btn-ghost:hover{ background: var(--border); }
+  .btn-accent{ background: var(--accent-soft); color: var(--accent); }
+  .btn-accent:hover{ background: #4A3B18; }
+  .btn-sm{ padding: 6px 11px; font-size: 12px; }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  .form-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
+  /* ---- Log table ---- */
+  .log-row{
+    display:grid; grid-template-columns: 62px 1fr 1fr 1fr 52px 30px 26px;
+    gap:8px; align-items:center; padding: 10px 4px; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .log-row.head{ font-family:'Sora', sans-serif; font-size:10.5px; text-transform:uppercase; font-weight:700; color: var(--ink-faint); letter-spacing:0.5px; border-bottom: 1.5px solid var(--border); }
+  .log-row .mins{ font-family:'JetBrains Mono', monospace; text-align:right; color: var(--ink-soft); }
+  .del-btn{ background:none; border:none; color: var(--ink-faint); font-size: 14px; cursor:pointer; padding: 2px 5px; border-radius:6px; }
+  .del-btn:hover{ color: var(--danger); background: var(--danger-soft); }
+  .edit-btn{ background:none; border:none; color: var(--ink-faint); font-size: 13px; cursor:pointer; padding: 2px 5px; border-radius:6px; }
+  .edit-btn:hover{ color: var(--primary); background: var(--primary-soft); }
+  .empty-note{ font-size: 13px; color: var(--ink-faint); padding: 18px 4px; text-align:center; }
+  .edit-row{
+    display:grid; grid-template-columns: 1fr 1fr 1fr 60px 60px auto auto; gap:8px; align-items:center;
+    padding: 10px 4px; border-bottom: 1px solid var(--border); background: var(--surface-alt); border-radius: var(--radius-sm);
+  }
+
+  /* ---- Subjects / topics ---- */
+  .paper-group-title{
+    font-family:'Sora', sans-serif; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px;
+    color: var(--primary); margin: 18px 0 8px; padding-bottom:6px; border-bottom: 1px solid var(--border);
+  }
+  .paper-group-title:first-child{ margin-top: 2px; }
+  .subject-block{ border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; overflow:hidden; background: var(--surface); }
+  .subject-head{ display:flex; justify-content:space-between; align-items:center; padding: 13px 15px; cursor:pointer; gap:12px; }
+  .subject-head:hover{ background: var(--surface-alt); }
+  .subject-head h3{ margin:0; font-family:'Sora', sans-serif; font-size:14.5px; font-weight:600; }
+  .subject-meta{ display:flex; align-items:center; gap:10px; }
+  .progress-pill{ font-family:'JetBrains Mono', monospace; font-size:11px; border-radius:999px; padding: 3px 10px; font-weight:600; }
+  .progress-bar-track{ width:70px; height:6px; background: var(--surface-alt); border-radius:4px; overflow:hidden; }
+  .progress-bar-fill{ height:100%; border-radius:4px; }
+  .topic-list{ padding: 2px 15px 14px; }
+  .topic-row{ padding: 9px 0; border-bottom: 1px solid var(--surface-alt); font-size:13.5px; }
+  .topic-row:last-child{ border-bottom:none; }
+  .topic-main{ display:flex; align-items:center; gap:10px; }
+  .topic-main input[type=checkbox]{ width:17px; height:17px; accent-color: var(--success); flex-shrink:0; }
+  .topic-name.done{ text-decoration: line-through; color: var(--ink-faint); }
+  .topic-main .del-btn{ margin-left:auto; }
+  .topic-badge{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 7px; border-radius:999px; flex-shrink:0; }
+  .badge-weak{ background: var(--danger-soft); color: var(--danger); }
+  .badge-high{ background: var(--accent-soft); color: var(--accent); }
+  .topic-sub{ display:flex; align-items:center; gap:8px; margin-top:5px; padding-left:27px; flex-wrap:wrap; }
+  .topic-sub .meta{ font-size:11px; color: var(--ink-faint); font-family:'JetBrains Mono', monospace; }
+  .topic-sub select{ font-size:11px; padding:4px 8px; }
+  .add-row{ display:flex; gap:8px; margin-top:12px; }
+  .add-row input{ flex:1; }
+  .icon-btn{ background:none; border:none; font-size:15px; cursor:pointer; color: var(--ink-faint); padding: 4px 6px; border-radius:6px; }
+  .icon-btn:hover{ color: var(--danger); background: var(--danger-soft); }
+
+  /* ---- Overview ---- */
+  .stat-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:12px; margin-bottom: 20px; }
+  .stat-card{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 15px 16px; box-shadow: var(--shadow); }
+  .stat-card .v{ font-family:'Sora', monospace; font-size:23px; font-weight:700; color: var(--primary); }
+  .stat-card .l{ font-size:11.5px; color: var(--ink-soft); margin-top:2px; }
+  .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:13px; }
+  .bar-row .name{ width:130px; flex-shrink:0; color: var(--ink-soft); }
+  .bar-row .track{ flex:1; height:9px; background: var(--surface-alt); border-radius:5px; overflow:hidden; }
+  .bar-row .fill{ height:100%; border-radius:5px; }
+  .bar-row .mins{ width:56px; text-align:right; font-family:'JetBrains Mono', monospace; font-size:12px; flex-shrink:0; }
+  .chart-toggle{ display:flex; gap:2px; background: var(--surface-alt); border-radius: 8px; padding:3px; flex-shrink:0; }
+  .chart-toggle-btn{ display:flex; align-items:center; justify-content:center; width:26px; height:24px; border-radius:6px; background:transparent; color: var(--ink-faint); padding:0; transition: background .15s ease, color .15s ease; }
+  .chart-toggle-btn:hover{ color: var(--ink-soft); }
+  .chart-toggle-btn.active{ background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+  .trend-wrap{ display:flex; align-items:flex-end; gap:6px; height:120px; padding-top:10px; }
+  .trend-wrap.line-mode{ position:relative; align-items:stretch; flex-direction:column; }
+  .trend-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px; }
+  .trend-bar{ width:100%; max-width:22px; background: var(--primary); border-radius: 4px 4px 0 0; min-height:2px; }
+  .trend-label{ font-size:9.5px; color: var(--ink-faint); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+
+  /* ---- UPSC extras ---- */
+
+  .upsc-banner{
+    display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+    background: linear-gradient(135deg, var(--primary-soft), var(--accent-soft));
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px 18px; margin-bottom: 18px; text-align:center;
+  }
+  .upsc-banner-tag{
+    font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.6px; color: var(--accent); background: var(--accent-soft); padding:4px 10px; border-radius:999px;
+    flex-shrink:0;
+  }
+  .upsc-banner-name{
+    font-family:'Sora', sans-serif; font-weight:800; font-size:16px; letter-spacing:0.4px; color: var(--ink);
+  }
+  .streak-box{ display:flex; align-items:center; gap:16px; }
+  .streak-ring{ width:64px; height:64px; border-radius:50%; flex-shrink:0; background: conic-gradient(var(--ring-color, var(--accent)) calc(var(--pct,0)*1%), var(--surface-alt) 0); display:flex; align-items:center; justify-content:center; }
+  .streak-ring-inner{ width:50px; height:50px; border-radius:50%; background:var(--surface); display:flex; align-items:center; justify-content:center; flex-direction:column; }
+  .streak-ring-inner .n{ font-family:'JetBrains Mono', monospace; font-weight:700; font-size:16px; color: var(--ink); }
+  .streak-ring-inner .u{ font-size:8.5px; color: var(--ink-faint); text-transform:uppercase; }
+  .toggle-btn{ width:100%; }
+  .list-row{ display:flex; justify-content:space-between; align-items:center; font-size:12.5px; padding:8px 0; border-bottom:1px solid var(--surface-alt); gap:10px; }
+  .list-row:last-child{ border-bottom:none; }
+  .list-row .cnt{ font-family:'JetBrains Mono', monospace; color: var(--primary); font-weight:600; flex-shrink:0; }
+  .list-row .note{ color: var(--ink-faint); font-style: italic; }
+  .stars{ color: var(--accent); font-size:11px; letter-spacing:1px; }
+
+  /* ---- Today ---- */
+  .today-hero{ display:flex; flex-wrap:wrap; gap:14px; margin-bottom:18px; }
+  .today-hero .stat-card{ flex:1; min-width:130px; }
+
+  .quote-card{
+    display:flex; align-items:flex-start; gap:12px;
+    background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md); padding: 16px 18px; margin-top: 22px; box-shadow: var(--shadow);
+  }
+  .quote-card .quote-text{ flex:1; font-family:'Sora', sans-serif; font-size: 14px; font-weight:600; font-style: italic; color: var(--ink); line-height:1.5; }
+  .quote-card textarea{
+    width:100%; min-height:60px; font-family:'Sora', sans-serif; font-size:14px; font-style:italic;
+    padding:10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-alt); color: var(--ink); resize: vertical;
+  }
+  .quote-card textarea:focus{ outline:none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .quote-edit-actions{ display:flex; gap:8px; margin-top:10px; }
+  .quote-edit-actions button{ padding: 6px 12px; font-size:12px; }
+  .icon-btn-quote{ background:none; border:none; color: var(--ink-faint); cursor:pointer; font-size:14px; padding:4px 6px; border-radius:6px; flex-shrink:0; }
+  .icon-btn-quote:hover{ color: var(--primary); background: var(--primary-soft); }
+  .footer-note{ text-align:center; color: var(--ink-faint); font-size:11.5px; margin-top:24px; }
+
+  /* ---- Heatmap ---- */
+  .heatmap-scroll{ overflow-x:auto; padding-bottom:4px; }
+  .heatmap-months{ display:grid; grid-auto-flow:column; grid-auto-columns:12px; gap:3px; width:max-content; margin-bottom:3px; }
+  .heatmap-months span{ font-size:9.5px; color:var(--ink-faint); white-space:nowrap; overflow:visible; line-height:1; }
+  .heatmap-grid{ display:grid; grid-auto-flow:column; grid-template-rows: repeat(7, 12px); gap:3px; width:max-content; }
+  .heatmap-cell{ width:12px; height:12px; border-radius:3px; background: var(--surface-alt); }
+  .heatmap-legend{ display:flex; gap:3px; align-items:center; }
+  .heatmap-legend .heatmap-cell{ width:10px; height:10px; }
+  .week-compare-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width:520px){ .week-compare-grid{ grid-template-columns: 1fr; } }
+  .wc-stat{ background: var(--surface-alt); border-radius: var(--radius-md); padding:14px 16px; }
+  .wc-stat .wc-label{ font-size:11.5px; color: var(--ink-soft); margin-bottom:6px; }
+  .wc-stat .wc-value{ font-family:'Sora', sans-serif; font-size:21px; font-weight:700; color: var(--ink); }
+  .wc-stat .wc-delta{ font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:600; margin-left:8px; }
+  .wc-delta.up{ color: var(--success); }
+  .wc-delta.down{ color: var(--danger); }
+  .wc-delta.flat{ color: var(--ink-faint); }
+  .mock-trend-svg{ width:100%; height:120px; display:block; }
+
+  .undo-toast{
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    box-shadow: var(--shadow); padding: 12px 16px; display:flex; align-items:center; gap:16px;
+    font-size:13px; color: var(--ink); z-index: 1000; max-width: 92vw;
+  }
+  .undo-toast button{ padding:6px 13px; font-size:12px; flex-shrink:0; }
+
+  @media (max-width:560px){
+    .log-row{ grid-template-columns: 48px 1fr 1fr 24px 24px; }
+    .log-row .mins{ display:none; }
+    .log-row [data-col="subtopic"]{ display:none; }
+    .edit-row{ grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ---- Sync badge ---- */
+  .sync-badge{
+    font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:600;
+    padding: 5px 10px; border-radius: 999px; letter-spacing: 0.3px;
+    transition: background .25s ease, color .25s ease;
+  }
+  .badge-synced { background: var(--success-soft); color: var(--success); }
+  .badge-saving  { background: var(--primary-soft); color: var(--primary); }
+  .badge-offline { background: var(--danger-soft);  color: var(--danger);  }
+  .badge-local   { background: var(--surface-alt);  color: var(--ink-soft);}
+
+  /* ---- Print report ---- */
+  #printReport{ display:none; }
+  @media print{
+    body > *:not(#printReport){ display:none !important; }
+    #printReport{ display:block !important; background:#fff; color:#111; padding:0; font-family: Arial, Helvetica, sans-serif; }
+    #printReport h1{ font-size:20px; margin:0 0 4px; }
+    #printReport h2{ font-size:14px; margin:22px 0 8px; }
+    #printReport .meta{ font-size:11px; color:#555; margin-bottom:18px; }
+    #printReport .stat-line{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:8px; }
+    #printReport .stat-box{ border:1px solid #ccc; border-radius:6px; padding:8px 13px; min-width:100px; }
+    #printReport .stat-box .v{ font-size:17px; font-weight:700; }
+    #printReport .stat-box .l{ font-size:10px; color:#555; }
+    #printReport table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+    #printReport th, #printReport td{ border:1px solid #ccc; padding:5px 8px; text-align:left; }
+    #printReport th{ background:#f3f3f3; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">P¹</div>
+      <div>
+        <h1>Prep for AIR-1</h1>
+        <p>Track. Revise. Improve. Repeat.</p>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="sync-badge badge-local" id="syncBadge" title="Cloud sync status">💾 Local</span>
+      <button class="icon-btn-quote" id="btnThemeToggle" title="Toggle theme" style="border:1px solid var(--border); border-radius:999px; padding:8px 12px; font-size:15px;">🌙</button>
+      <div class="countdown-chip" id="studyStreakChip" title="Consecutive days with at least 4h studied">
+        <div>
+          <div class="num" id="studyStreakNum" style="color:var(--accent);">—</div>
+          <div class="lbl" id="studyStreakLbl">day streak 🔥</div>
+        </div>
+      </div>
+      <div class="countdown-chip">
+        <div>
+          <div class="num" id="countdownNum">—</div>
+          <div class="lbl">days to Prelims</div>
+        </div>
+        <input type="date" id="examDateInput">
+      </div>
+    </div>
+  </div>
+
+  <div class="mission-banner">
+    <div class="mission-main">
+      <span class="mission-tag">MISSION: AIR-1</span>
+      <span class="mission-detail">UPSC CSE 2027 · Day 1 → Final Result</span>
+    </div>
+    <div class="mission-quote">Build the candidate before chasing the rank.</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="today">Today</div>
+    <div class="tab" data-tab="timer">Log</div>
+    <div class="tab" data-tab="topics">Subjects</div>
+    <div class="tab" data-tab="upsc">UPSC</div>
+    <div class="tab" data-tab="optional">Optional</div>
+    <div class="tab" data-tab="analysis">Analysis</div>
+    <div class="tab" data-tab="overview">Overview</div>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div class="panel" id="tab-dashboard">
+    <div class="dash-header">
+      <div class="dash-name">PRIYANSHU SACHAN</div>
+      <div class="dash-sub">AIR-1 Preparation · UPSC CSE 2027</div>
+    </div>
+    <div class="stat-grid" id="dashStatGrid"></div>
+    <div class="card">
+      <h2 class="section-title">Where things stand</h2>
+      <p class="section-sub">Pulled from your mock scores, syllabus checklist, and revision queue.</p>
+      <div id="dashInsights"></div>
+    </div>
+  </div>
+
+  <!-- TODAY TAB -->
+  <div class="panel hidden" id="tab-today">
+    <div class="today-greeting" id="todayGreeting"></div>
+    <div class="today-hero" id="todayHero"></div>
+    <div class="card">
+      <h2 class="section-title">Today's sessions</h2>
+      <div id="todaySessions"></div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div class="panel hidden" id="tab-timer">
+    <div class="card">
+      <h2 class="section-title">Today's progress</h2>
+      <div class="form-row" style="margin-bottom:16px;">
+        <span class="section-sub" style="margin:0;">Daily goal:</span>
+        <select id="dailyGoalSelect">
+          <option value="480">8 hours</option>
+          <option value="600">10 hours</option>
+          <option value="720">12 hours</option>
+          <option value="840">14 hours</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input type="number" id="dailyGoalCustomInput" class="hidden" min="0.5" max="24" step="0.5" placeholder="Hrs" style="width:70px;">
+      </div>
+      <div class="streak-box">
+        <div class="streak-ring" id="dailyGoalRing" style="width:84px;height:84px;flex-shrink:0;--ring-color:var(--primary);">
+          <div class="streak-ring-inner" style="width:68px;height:68px;">
+            <span class="n" id="dailyGoalHours" style="font-size:14.5px;">0h</span>
+            <span class="u">of 14h</span>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;" id="dailyGoalNote">0% of today's goal</div>
+          <div class="progress-bar-track" style="width:100%; height:8px;">
+            <div class="progress-bar-fill" id="dailyGoalBarFill" style="width:0%; background:var(--primary);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Daily current affairs</h2>
+      <p class="section-sub">Mark off days you've read The Hindu.</p>
+      <div class="streak-box">
+        <div class="streak-ring" id="streakRing"><div class="streak-ring-inner"><span class="n" id="streakNum">0</span><span class="u">streak</span></div></div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--ink-soft); margin-bottom:8px;" id="streakTotal">0 days logged</div>
+          <button class="btn-accent toggle-btn" id="btnMarkNews">Mark today done</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Log a session</h2>
+      <p class="section-sub">Time it on your phone, then drop the numbers in here.</p>
+      <div class="form-row">
+        <select id="manualSubject"></select>
+        <select id="manualSubtopic"></select>
+        <button class="icon-btn-quote" id="btnAddSubtopic" title="Add a new subtopic to this subject" style="border:1px solid var(--border); border-radius:8px;">+ Subtopic</button>
+        <input type="text" id="manualTopic" placeholder="Topic" style="min-width:120px; flex:1;">
+        <input type="number" id="manualHours" placeholder="Hrs" min="0" style="width:64px;">
+        <input type="number" id="manualMinutes" placeholder="Mins" min="0" max="59" style="width:64px;">
+        <select id="manualDay"><option value="today" selected>Today</option><option value="yesterday">Yesterday</option></select>
+        <button class="btn-primary" id="btnManualAdd">Add entry</button>
+      </div>
+      <div class="form-row hidden" id="newSubtopicRow" style="margin-top:10px;">
+        <input type="text" id="newSubtopicInput" placeholder="New subtopic name" style="flex:1; min-width:160px;">
+        <button class="btn-primary" id="btnSaveSubtopic">Save</button>
+        <button class="btn-ghost" id="btnCancelSubtopic">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2 class="section-title">Entries</h2>
+        <button class="btn-ghost btn-sm" id="btnExportCsv">Export CSV</button>
+      </div>
+      <div class="form-row" style="margin-bottom:14px;">
+        <select id="filterSubject"><option value="">All subjects</option></select>
+        <input type="date" id="filterFrom" title="From date">
+        <input type="date" id="filterTo" title="To date">
+        <button class="btn-ghost btn-sm" id="btnClearFilters">Clear filters</button>
+      </div>
+      <div id="logList"></div>
+    </div>
+  </div>
+
+  <!-- TOPICS TAB -->
+  <div class="panel hidden" id="tab-topics">
+    <div class="card" id="reviewQueueCard">
+      <div class="card-head-row">
+        <div>
+          <h2 class="section-title">My revision queue</h2>
+          <p class="section-sub">Completed topics that haven't been revised in a while, most overdue first.</p>
+        </div>
+      </div>
+      <div id="reviewQueueList"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Subjects &amp; topics</h2>
+      <p class="section-sub">Tap a subject to expand its topic checklist. Tag priority and log revisions per topic.</p>
+      <div id="subjectList"></div>
+      <div class="add-row">
+        <input type="text" id="newSubjectName" placeholder="Add a new subject">
+        <select id="newSubjectPaper">
+          <option value="">Unassigned</option>
+          <option value="gs1">GS Paper 1</option>
+          <option value="gs2">GS Paper 2</option>
+          <option value="gs3">GS Paper 3</option>
+          <option value="gs4">GS Paper 4</option>
+        </select>
+        <button class="btn-primary" id="btnAddSubject">Add subject</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPSC TAB -->
+  <div class="panel hidden" id="tab-upsc">
+    <div class="upsc-banner">
+      <span class="upsc-banner-tag">IAS (to be)</span>
+      <span class="upsc-banner-name">PRIYANSHU SACHAN</span>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Answer writing practice</h2>
+      <p class="section-sub">Log how many mains-style answers you wrote, with a quick self-rating.</p>
+      <div class="streak-box" style="margin-bottom:16px;">
+        <div class="streak-ring" id="answerStreakRing"><div class="streak-ring-inner"><span class="n" id="answerStreakNum">0</span><span class="u">streak</span></div></div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--ink-soft);" id="answerStreakTotal">0 days logged</div>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <select id="answerSubject"></select>
+        <input type="number" id="answerCount" placeholder="Answers" min="1" style="width:80px;">
+      </div>
+      <div class="form-row" style="margin-bottom:12px;">
+        <select id="answerRating">
+          <option value="">Rate quality (optional)</option>
+          <option value="1">★ 1 - Needs work</option>
+          <option value="2">★★ 2</option>
+          <option value="3">★★★ 3 - Okay</option>
+          <option value="4">★★★★ 4</option>
+          <option value="5">★★★★★ 5 - Strong</option>
+        </select>
+        <input type="text" id="answerNote" placeholder="Note (optional)" style="flex:1; min-width:100px;">
+        <button class="btn-primary" id="btnLogAnswers">Log today</button>
+      </div>
+      <div id="answerLogList"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="section-title">Mock test scores</h2>
+      <p class="section-sub">Log prelims and mains mock results as you take them.</p>
+      <div class="form-row" style="margin-bottom:12px;">
+        <input type="text" id="mockName" placeholder="Test name (e.g. Prelims Mock 5)" style="flex:1; min-width:160px;">
+        <select id="mockSubject"><option value="">General / Full test</option></select>
+        <input type="number" id="mockScore" placeholder="Score" style="width:80px;">
+        <input type="number" id="mockMax" placeholder="Out of" style="width:80px;">
+        <button class="btn-primary" id="btnLogMock">Log test</button>
+      </div>
+      <div id="mockTrendWrap" class="hidden">
+        <div class="card-head-row" style="margin-bottom:6px;">
+          <p class="section-sub" style="margin:0;">Score trend (%)</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="mockTrendSubject" style="font-size:12px; padding:6px 9px;"></select>
+            <div class="chart-toggle" id="mockChartToggle">
+              <button type="button" class="chart-toggle-btn" data-type="bar" title="Bar graph">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="7" width="3" height="6" rx="0.5" fill="currentColor"/><rect x="5.5" y="3" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="10" y="5" width="3" height="8" rx="0.5" fill="currentColor"/></svg>
+              </button>
+              <button type="button" class="chart-toggle-btn" data-type="line" title="Line graph">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 10L5 6L8 8.5L13 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="1" cy="10" r="1.2" fill="currentColor"/><circle cx="5" cy="6" r="1.2" fill="currentColor"/><circle cx="8" cy="8.5" r="1.2" fill="currentColor"/><circle cx="13" cy="2" r="1.2" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="mockTrendStats" class="mock-trend-stats"></div>
+        <div id="mockTrendChart"></div>
+      </div>
+      <div id="mockList"></div>
+    </div>
+  </div>
+
+  <!-- OPTIONAL TAB -->
+  <div class="panel hidden" id="tab-optional">
+    <div class="upsc-banner">
+      <span class="upsc-banner-tag">OPTIONAL</span>
+      <span class="upsc-banner-name" id="optionalSubjectName">SOCIOLOGY</span>
+    </div>
+
+    <div class="stat-grid" id="optionalStatGrid" style="margin-bottom:18px;"></div>
+
+    <div class="card">
+      <h2 class="section-title">Paper 1</h2>
+      <p class="section-sub">Fundamentals of Sociology — tap a topic to mark it done, tag it, or log a revision.</p>
+      <div id="optionalTopicsP1"></div>
+      <div class="add-row">
+        <input type="text" id="newOptionalTopicP1" placeholder="Add a topic to Paper 1">
+        <button class="btn-primary" id="btnAddOptionalTopicP1">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Paper 2</h2>
+      <p class="section-sub">Indian Society</p>
+      <div id="optionalTopicsP2"></div>
+      <div class="add-row">
+        <input type="text" id="newOptionalTopicP2" placeholder="Add a topic to Paper 2">
+        <button class="btn-primary" id="btnAddOptionalTopicP2">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Notes / revision queue</h2>
+      <p class="section-sub">Completed optional topics that haven't been revised in a while, most overdue first.</p>
+      <div id="optionalRevisionList"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Previous year questions</h2>
+      <p class="section-sub">Log PYQs you've practiced, by paper.</p>
+      <div class="form-row" style="margin-bottom:12px;">
+        <select id="optionalPyqPaper">
+          <option value="paper1">Paper 1</option>
+          <option value="paper2">Paper 2</option>
+        </select>
+        <input type="number" id="optionalPyqCount" placeholder="Questions" min="1" style="width:90px;">
+        <input type="text" id="optionalPyqNote" placeholder="Note (optional)" style="flex:1; min-width:120px;">
+        <button class="btn-primary" id="btnLogOptionalPyq">Log</button>
+      </div>
+      <div id="optionalPyqList"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Answer writing</h2>
+      <p class="section-sub">Log mains-style optional answers written, with a quick self-rating.</p>
+      <div class="streak-box" style="margin-bottom:16px;">
+        <div class="streak-ring" id="optionalAnswerStreakRing"><div class="streak-ring-inner"><span class="n" id="optionalAnswerStreakNum">0</span><span class="u">streak</span></div></div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--ink-soft);" id="optionalAnswerStreakTotal">0 days logged</div>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <select id="optionalAnswerPaper">
+          <option value="paper1">Paper 1</option>
+          <option value="paper2">Paper 2</option>
+        </select>
+        <input type="number" id="optionalAnswerCount" placeholder="Answers" min="1" style="width:80px;">
+      </div>
+      <div class="form-row" style="margin-bottom:12px;">
+        <select id="optionalAnswerRating">
+          <option value="">Rate quality (optional)</option>
+          <option value="1">★ 1 - Needs work</option>
+          <option value="2">★★ 2</option>
+          <option value="3">★★★ 3 - Okay</option>
+          <option value="4">★★★★ 4</option>
+          <option value="5">★★★★★ 5 - Strong</option>
+        </select>
+        <input type="text" id="optionalAnswerNote" placeholder="Note (optional)" style="flex:1; min-width:100px;">
+        <button class="btn-primary" id="btnLogOptionalAnswers">Log today</button>
+      </div>
+      <div id="optionalAnswerLogList"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Mock scores</h2>
+      <p class="section-sub">Log optional mock test results as you take them.</p>
+      <div class="form-row" style="margin-bottom:12px;">
+        <input type="text" id="optionalMockName" placeholder="Test name (e.g. Optional Mock 3)" style="flex:1; min-width:160px;">
+        <select id="optionalMockPaper">
+          <option value="">Both papers</option>
+          <option value="paper1">Paper 1</option>
+          <option value="paper2">Paper 2</option>
+        </select>
+        <input type="number" id="optionalMockScore" placeholder="Score" style="width:80px;">
+        <input type="number" id="optionalMockMax" placeholder="Out of" style="width:80px;">
+        <button class="btn-primary" id="btnLogOptionalMock">Log test</button>
+      </div>
+      <div id="optionalMockStats" style="margin-bottom:10px;"></div>
+      <div id="optionalMockList"></div>
+    </div>
+  </div>
+
+  <!-- MOCK ANALYSIS TAB -->
+  <div class="panel hidden" id="tab-analysis">
+    <div class="card">
+      <h2 class="section-title">Where marks are actually being lost</h2>
+      <p class="section-sub">Aggregated across every mock you've analysed — not just scores, but why.</p>
+      <div class="stat-grid" id="analysisStatGrid"></div>
+      <div class="reason-bar-wrap" id="reasonBarWrap"></div>
+      <div class="reason-legend" id="reasonLegend"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Mock-by-mock breakdown</h2>
+      <p class="section-sub">Tap a mock to add or edit its analysis.</p>
+      <div id="analysisList"></div>
+    </div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div class="panel hidden" id="tab-overview">
+    <h2 class="section-title" style="margin-bottom:12px;">At a glance</h2>
+    <div class="stat-grid" id="statGrid"></div>
+
+    <div class="card">
+      <h2 class="section-title">This week vs last week</h2>
+      <p class="section-sub">Momentum check — how the last 7 days compare to the 7 before that.</p>
+      <div id="weekCompare"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <div>
+          <h2 class="section-title">Study calendar</h2>
+          <p class="section-sub">Every day, at a glance. Hover a square for the date and hours.</p>
+        </div>
+        <div class="form-row" style="gap:12px; flex-wrap:nowrap;">
+          <span style="font-size:10.5px; color:var(--ink-faint);">Less</span>
+          <div class="heatmap-legend" id="heatmapLegend"></div>
+          <span style="font-size:10.5px; color:var(--ink-faint);">More</span>
+        </div>
+      </div>
+      <div class="heatmap-scroll">
+        <div id="heatmapMonths" class="heatmap-months"></div>
+        <div id="heatmapChart" class="heatmap-grid"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head-row">
+        <h2 class="section-title">Last 14 days</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div class="chart-toggle" id="trendChartToggle">
+            <button type="button" class="chart-toggle-btn" data-type="bar" title="Bar graph">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="7" width="3" height="6" rx="0.5" fill="currentColor"/><rect x="5.5" y="3" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="10" y="5" width="3" height="8" rx="0.5" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-toggle-btn" data-type="line" title="Line graph">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 10L5 6L8 8.5L13 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="1" cy="10" r="1.2" fill="currentColor"/><circle cx="5" cy="6" r="1.2" fill="currentColor"/><circle cx="8" cy="8.5" r="1.2" fill="currentColor"/><circle cx="13" cy="2" r="1.2" fill="currentColor"/></svg>
+            </button>
+          </div>
+          <button type="button" class="chart-toggle-btn" id="btnExportTrendPng" title="Download chart as PNG" style="background:var(--surface-alt);">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M7 9L4 6M7 9l3-3M2 12h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="section-sub" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#F28B8B;display:inline-block;"></span>0-4h</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#E8D44D;display:inline-block;"></span>4-8h</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#8FCBF2;display:inline-block;"></span>8-12h</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:#34C374;display:inline-block;"></span>12h+</span>
+      </p>
+      <div class="trend-wrap" id="trendChart"></div>
+    </div>
+    <div class="card">
+      <div class="card-head-row">
+        <h2 class="section-title">Hours by subject</h2>
+        <div class="chart-toggle" id="subjectChartToggle">
+          <button type="button" class="chart-toggle-btn" data-type="bar" title="Bar list">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="10" height="2.4" rx="0.8" fill="currentColor"/><rect x="1" y="6" width="7" height="2.4" rx="0.8" fill="currentColor"/><rect x="1" y="10" width="4" height="2.4" rx="0.8" fill="currentColor"/></svg>
+          </button>
+          <button type="button" class="chart-toggle-btn" data-type="donut" title="Donut chart">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.3" stroke="currentColor" stroke-width="2.4" fill="none" stroke-dasharray="14 19"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="subjectBars"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Where I need to improve</h2>
+      <p class="section-sub">Subjects scoring below your overall mock average <em>and</em> getting below-average study time — the biggest opportunity for improvement.</p>
+      <div id="subjectInsights"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Backup &amp; restore</h2>
+      <p class="section-sub">Everything here lives only in this app's storage. Download a backup now and then so months of logs are never one wiped browser away from gone.</p>
+      <div class="form-row">
+        <button class="btn-primary" id="btnDownloadBackup">⬇ Download backup</button>
+        <button class="btn-ghost" id="btnImportBackup">⬆ Import backup</button>
+        <button class="btn-ghost" id="btnDownloadPdf">📄 Download PDF report</button>
+        <input type="file" id="importFileInput" accept="application/json" class="hidden">
+      </div>
+      <div class="hidden" id="importConfirmRow" style="margin-top:12px; background: var(--danger-soft); border-radius: var(--radius-sm); padding:12px 14px;">
+        <p style="margin:0 0 10px; font-size:12.5px; color: var(--ink);">This will replace everything currently saved in the app with the contents of this file. This can't be undone.</p>
+        <div class="form-row">
+          <button class="btn-primary" id="btnConfirmImport" style="background:var(--danger);">Replace my data</button>
+          <button class="btn-ghost" id="btnCancelImport">Cancel</button>
+        </div>
+      </div>
+      <p class="section-sub" id="backupNote" style="margin-top:10px; margin-bottom:0;"></p>
+    </div>
+  </div>
+
+  <div class="quote-card" id="quoteCard">
+    <div class="quote-text" id="quoteText"></div>
+    <button class="icon-btn-quote" id="btnEditQuote" title="Edit quote">✎</button>
+  </div>
+
+  <div class="footer-note">Data is stored privately to your account and stays saved between visits.</div>
+</div>
+
+<div id="printReport"></div>
+
+<div class="undo-toast hidden" id="undoToast">
+  <span id="undoToastMsg"></span>
+  <button class="btn-primary btn-sm" id="undoToastBtn">Undo</button>
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'prep-register-data';
+  let data = { subjects: [], sessions: [], examDate: null, newsReadDates: [], answerLogs: [], quote: null, customSubtopics: {}, mockTests: [], theme: 'dark', trendChartType: 'bar', mockChartType: 'line', subjectChartType: 'bar', dailyGoalMinutes: 14*60, optional: null };
+  const DEFAULT_QUOTE = "Success is the sum of small efforts, repeated day in and day out.";
+  let editingSessionId = null;
+
+  const GS_PAPERS = ['gs1','gs2','gs3','gs4'];
+  const GS_PAPER_LABELS = { gs1: 'GS Paper 1', gs2: 'GS Paper 2', gs3: 'GS Paper 3', gs4: 'GS Paper 4', unassigned: 'Other / Unassigned' };
+  const NAME_TO_PAPER = {
+    'Art and Culture': 'gs1', 'Ancient History': 'gs1', 'Medieval History': 'gs1', 'Modern History': 'gs1', 'Geography': 'gs1', 'World History and Society': 'gs1',
+    'Governance': 'gs2', 'Polity': 'gs2', 'Social Justice': 'gs2', 'International Relations': 'gs2',
+    'Science and Technology': 'gs3', 'Economics': 'gs3', 'Environment and Ecology': 'gs3', 'Internal Security and Disaster Management': 'gs3',
+    'Ethics, Integrity and Aptitude': 'gs4',
+  };
+
+  // Legacy subject names -> their current GS-paper-taxonomy name. This is a
+  // rename, not an add/remove, so an existing subject keeps its id and stays
+  // attached to whatever sessions, mock tests, and topics were logged against it.
+  const LEGACY_SUBJECT_RENAMES = {
+    'indian polity': 'Polity',
+    'environment': 'Environment and Ecology',
+    'disaster management': 'Internal Security and Disaster Management',
+  };
+
+  const defaultSubjects = () => ([
+    'Art and Culture','Ancient History','Medieval History','Modern History','Geography','World History and Society',
+    'Governance','Polity','Social Justice','International Relations',
+    'Science and Technology','Economics','Environment and Ecology','Internal Security and Disaster Management',
+    'Ethics, Integrity and Aptitude',
+  ].map(name => ({ id: uid(), name, topics: [], paper: NAME_TO_PAPER[name] || null })));
+
+  // Optional subject (Sociology) starter syllabus — standard UPSC unit
+  // breakdown for Paper 1 (Fundamentals) and Paper 2 (Indian Society).
+  const OPTIONAL_TOPIC_NAMES = {
+    paper1: ['Sociology – The Discipline','Sociology as Science','Research Methods and Analysis','Sociological Thinkers','Stratification and Social Mobility','Works and Economic Life','Politics and Society','Religion and Society','Systems of Kinship','Social Change in Modern Society'],
+    paper2: ['Introducing Indian Society','Social Structure','Social Changes in India','Rural and Agrarian Transformation in India','Population Dynamics','Challenges of Social Transformation'],
+  };
+  const defaultOptionalTopics = () => ({
+    paper1: OPTIONAL_TOPIC_NAMES.paper1.map(name => ({ id: uid(), name, done:false, revisionCount:0, lastRevised:null, priority:null })),
+    paper2: OPTIONAL_TOPIC_NAMES.paper2.map(name => ({ id: uid(), name, done:false, revisionCount:0, lastRevised:null, priority:null })),
+  });
+
+  const SUBTOPICS = {
+    'Science and Technology': ['Biotechnology','Space Technology','Nuclear Technology','Defence Technology','IT & Computers','Robotics & AI','Health & Medicine','Nanotechnology'],
+    'Modern History': ['British Expansion','Revolt of 1857','Socio-Religious Reform Movements','Indian National Movement','Freedom Struggle (Gandhian Era)','Post-Independence Consolidation'],
+    'Ancient History': ['Prehistoric Period','Indus Valley Civilization','Vedic Age','Mauryan Empire','Post-Mauryan Period','Gupta Empire','South Indian Kingdoms'],
+    'Medieval History': ['Delhi Sultanate','Mughal Empire','Bhakti & Sufi Movements','Vijayanagara Empire','Regional Kingdoms','Advent of Europeans'],
+    'Art and Culture': ['Architecture','Dance Forms','Music','Painting','Literature','Religion & Philosophy','Fairs & Festivals'],
+    'World History and Society': ['Industrial Revolution','World Wars','Colonization & Decolonization','Redrawal of National Boundaries','Population & Associated Issues','Poverty & Developmental Issues','Urbanization & its Problems','Globalization — Effect on Society'],
+    'Governance': ['Government Policies & Interventions','Development Processes & the Development Industry','NGOs, SHGs & Other Stakeholders','e-Governance','Transparency & Accountability','Role of Civil Services in a Democracy'],
+    'Polity': ['Constitution & Preamble','Fundamental Rights & DPSP','Parliament','Judiciary','Executive','Local Government','Constitutional Bodies'],
+    'Social Justice': ['Health','Education','Human Resource Development','Poverty & Hunger','Welfare Schemes for Vulnerable Sections','Issues Relating to SC/ST/OBC/Minorities','Rights of Women & Children'],
+    'International Relations': ['India & its Neighbourhood','Bilateral, Regional & Global Groupings','Effect of Policies of Developed/Developing Countries on India','Indian Diaspora','Important International Institutions'],
+    'Economics': ['Basics of Indian Economy','Budget & Fiscal Policy','Banking & Finance','Planning & NITI Aayog','Agriculture','Industry & Infrastructure','External Sector & Trade'],
+    'Geography': ['Physical Geography','Indian Geography','World Geography','Climatology','Oceanography','Economic Geography'],
+    'Environment and Ecology': ['Ecology & Ecosystems','Biodiversity','Climate Change','Pollution','Conservation Efforts','Environmental Laws','International Conventions'],
+    'Internal Security and Disaster Management': ['Linkages of Organized Crime with Terrorism','Role of External State & Non-State Actors','Security Challenges in Border Areas','Cyber Security Basics','Money-Laundering & its Prevention','Natural & Man-made Disasters','Disaster Management Cycle & NDMA'],
+    'Ethics, Integrity and Aptitude': ['Ethics and Human Interface','Attitude','Aptitude & Foundational Values','Emotional Intelligence','Contributions of Moral Thinkers','Public/Civil Service Values','Probity in Governance','Case Studies'],
+  };
+  const BAR_COLORS = ['#7C6FF2','#FF9F5B','#E85CB0','#2FB6A3','#C879F2','#5C6BC0','#F2637C','#B08D57','#6EC6CA','#A15CC9'];
+  const DEFAULT_DAILY_GOAL_MINUTES = 14*60;
+  const STREAK_THRESHOLD_MINUTES = 4*60; // a day only counts toward the study streak once 4h+ is logged
+  const CONSISTENCY_WINDOW_DAYS = 28; // consistency score looks back this many days
+  const REVISION_DUE_DAYS = 7; // a completed topic becomes "due" once it's been this many days (or never revised)
+  const REVIEW_QUEUE_SIZE = 8; // cap on how many due topics to show at once
+
+  function getDailyGoal(){ return data.dailyGoalMinutes || DEFAULT_DAILY_GOAL_MINUTES; }
+
+  function renderDailyGoal(){
+    const ring = document.getElementById('dailyGoalRing');
+    if(!ring) return;
+    const t = todayStr();
+    const goalMin = getDailyGoal();
+    const todayMin = data.sessions.filter(s=>s.date===t).reduce((a,s)=>a+s.minutes,0);
+    const pct = Math.min(100, Math.round(todayMin/goalMin*100));
+    const goalColor = todayMin >= goalMin ? 'var(--success)' : 'var(--yellow)';
+    ring.style.setProperty('--pct', pct);
+    ring.style.setProperty('--ring-color', goalColor);
+    document.getElementById('dailyGoalHours').textContent = (todayMin/60).toFixed(1)+'h';
+    document.getElementById('dailyGoalNote').textContent = pct + "% of today's goal";
+    document.querySelector('#dailyGoalRing .u').textContent = 'of ' + (goalMin/60) + 'h';
+    const fill = document.getElementById('dailyGoalBarFill');
+    fill.style.width = pct+'%';
+    fill.style.background = goalColor;
+  }
+
+  function renderDailyGoalSetting(){
+    const sel = document.getElementById('dailyGoalSelect');
+    const custom = document.getElementById('dailyGoalCustomInput');
+    if(!sel) return;
+    const presets = ['480','600','720','840'];
+    const mins = getDailyGoal();
+    if(presets.includes(String(mins))){
+      sel.value = String(mins);
+      custom.classList.add('hidden');
+    } else {
+      sel.value = 'custom';
+      custom.classList.remove('hidden');
+      custom.value = (mins/60);
+    }
+  }
+
+  function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+  // Format a Date object as YYYY-MM-DD using LOCAL time (not UTC), so a
+  // session logged at, say, 2:00 AM IST is recorded against the correct
+  // local calendar day instead of rolling back to the previous UTC date.
+  function localDateStr(d){
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+day;
+  }
+  function todayStr(){ return localDateStr(new Date()); }
+  function yesterdayStr(){ const d = new Date(); d.setDate(d.getDate()-1); return localDateStr(d); }
+  function escapeHtml(str){ return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function flashInvalid(el){ el.style.outline = '2px solid var(--danger)'; el.style.outlineOffset = '1px'; setTimeout(()=>{ el.style.outline = ''; }, 1200); }
+  function formatDuration(totalMin){
+    const h = Math.floor(totalMin/60); const m = totalMin % 60;
+    if(h && m) return h+'h '+m+'m';
+    if(h) return h+'h';
+    return m+'m';
+  }
+
+  // ---------- Undo toast ----------
+  let undoState = null;
+  let undoTimer = null;
+  function showUndoToast(message, restoreFn){
+    clearTimeout(undoTimer);
+    undoState = { restore: restoreFn };
+    const toast = document.getElementById('undoToast');
+    document.getElementById('undoToastMsg').textContent = message;
+    toast.classList.remove('hidden');
+    undoTimer = setTimeout(()=>{ toast.classList.add('hidden'); undoState = null; }, 5000);
+  }
+  document.getElementById('undoToastBtn').addEventListener('click', async ()=>{
+    if(undoState && undoState.restore){ await undoState.restore(); }
+    clearTimeout(undoTimer);
+    document.getElementById('undoToast').classList.add('hidden');
+    undoState = null;
+  });
+
+  function ensureTopicFromSubtopic(subject, name){
+    if(!subject || !name) return;
+    const exists = subject.topics.some(t => t.name.toLowerCase() === name.toLowerCase());
+    if(!exists) subject.topics.push({ id: uid(), name, done:false, revisionCount:0, lastRevised:null, priority:null });
+  }
+  function syncAllSubtopicsToTopics(){
+    data.subjects.forEach(sub=>{
+      const preset = SUBTOPICS[sub.name] || [];
+      const custom = data.customSubtopics[sub.id] || [];
+      [...preset, ...custom].forEach(name => ensureTopicFromSubtopic(sub, name));
+    });
+  }
+  function migrateTopicFields(){
+    data.subjects.forEach(sub=>{
+      sub.topics.forEach(t=>{
+        if(t.revisionCount === undefined) t.revisionCount = 0;
+        if(t.lastRevised === undefined) t.lastRevised = null;
+        if(t.priority === undefined) t.priority = null;
+      });
+    });
+    ['paper1','paper2'].forEach(p=>{
+      (data.optional.topics[p]||[]).forEach(t=>{
+        if(t.revisionCount === undefined) t.revisionCount = 0;
+        if(t.lastRevised === undefined) t.lastRevised = null;
+        if(t.priority === undefined) t.priority = null;
+      });
+    });
+  }
+  // Backfills data.optional (the Sociology optional-subject tracker) so
+  // older saved data — or a fresh account — always has the full shape.
+  function ensureOptionalDefaults(){
+    if(!data.optional) data.optional = { name: 'Sociology', topics: defaultOptionalTopics(), pyqLogs: [], answerLogs: [], mockTests: [] };
+    if(!data.optional.name) data.optional.name = 'Sociology';
+    if(!data.optional.topics) data.optional.topics = defaultOptionalTopics();
+    if(!data.optional.topics.paper1) data.optional.topics.paper1 = [];
+    if(!data.optional.topics.paper2) data.optional.topics.paper2 = [];
+    if(!data.optional.pyqLogs) data.optional.pyqLogs = [];
+    if(!data.optional.answerLogs) data.optional.answerLogs = [];
+    if(!data.optional.mockTests) data.optional.mockTests = [];
+  }
+  function migratePaperField(){
+    // Rename any subjects still sitting under a pre-restructure name, so
+    // their existing sessions/mocks/topics carry forward under the id.
+    data.subjects.forEach(sub=>{
+      const renamed = LEGACY_SUBJECT_RENAMES[sub.name.trim().toLowerCase()];
+      if(renamed){ sub.name = renamed; sub.paper = NAME_TO_PAPER[renamed] || sub.paper; }
+    });
+    data.subjects.forEach(sub=>{
+      if(sub.paper === undefined || sub.paper === '') sub.paper = NAME_TO_PAPER[sub.name] || null;
+    });
+    // Add any subjects the current GS-paper taxonomy expects that this
+    // account doesn't have yet (new subjects, not renames).
+    const REQUIRED_SUBJECTS = [
+      ['World History and Society', 'gs1'],
+      ['Governance', 'gs2'],
+      ['Social Justice', 'gs2'],
+      ['International Relations', 'gs2'],
+      ['Ethics, Integrity and Aptitude', 'gs4'],
+    ];
+    REQUIRED_SUBJECTS.forEach(([name, paper])=>{
+      const exists = data.subjects.some(s => s.name.trim().toLowerCase() === name.toLowerCase());
+      if(!exists) data.subjects.push({ id: uid(), name, topics: [], paper });
+    });
+  }
+
+  // ── Storage helpers ──────────────────────────────────────────────────
+  // Reads/writes via window.appStorage (Firebase + localStorage hybrid)
+  // defined in the <script type="module"> block near the top of the file.
+  // If that module hasn't loaded yet we fall back to plain localStorage.
+  function getStorage(){
+    return window.appStorage || {
+      async get(key){ return localStorage.getItem(key); },
+      async set(key, value){ localStorage.setItem(key, value); }
+    };
+  }
+
+  async function load(){
+    try{
+      const raw = await getStorage().get(STORAGE_KEY);
+      if(raw){
+        data = JSON.parse(raw);
+        if(!data.subjects) data.subjects = [];
+        if(!data.sessions) data.sessions = [];
+        if(!data.newsReadDates) data.newsReadDates = [];
+        if(!data.answerLogs) data.answerLogs = [];
+        if(data.examDate === undefined) data.examDate = null;
+        if(!data.quote) data.quote = DEFAULT_QUOTE;
+        if(!data.customSubtopics) data.customSubtopics = {};
+        if(!data.mockTests) data.mockTests = [];
+        if(!data.theme) data.theme = 'dark';
+        if(!data.trendChartType) data.trendChartType = 'bar';
+        if(!data.mockChartType) data.mockChartType = 'line';
+        if(!data.subjectChartType) data.subjectChartType = 'bar';
+        if(!data.dailyGoalMinutes) data.dailyGoalMinutes = 14*60;
+      } else {
+        data = { subjects: defaultSubjects(), sessions: [], examDate: null, newsReadDates: [], answerLogs: [], quote: DEFAULT_QUOTE, customSubtopics: {}, mockTests: [], theme: 'dark', trendChartType: 'bar', mockChartType: 'line', subjectChartType: 'bar', dailyGoalMinutes: 14*60 };
+      }
+      ensureOptionalDefaults();
+      migrateTopicFields();
+      migratePaperField();
+      syncAllSubtopicsToTopics();
+      await save();
+    }catch(e){
+      data = { subjects: defaultSubjects(), sessions: [], examDate: null, newsReadDates: [], answerLogs: [], quote: DEFAULT_QUOTE, customSubtopics: {}, mockTests: [], theme: 'dark', trendChartType: 'bar', mockChartType: 'line', subjectChartType: 'bar', dailyGoalMinutes: 14*60 };
+      ensureOptionalDefaults();
+      migratePaperField();
+      syncAllSubtopicsToTopics();
+      try{ await save(); }catch(e2){ console.error('init save failed', e2); }
+    }
+    renderAll();
+  }
+  async function save(){
+    try{ await getStorage().set(STORAGE_KEY, JSON.stringify(data)); }
+    catch(e){ console.error('Storage save failed', e); }
+  }
+
+  // ---------- Backup / restore ----------
+  function setBackupNote(msg, isError){
+    const el = document.getElementById('backupNote');
+    if(!el) return;
+    el.textContent = msg;
+    el.style.color = isError ? 'var(--danger)' : 'var(--ink-soft)';
+  }
+
+  function buildPrintReport(){
+    const totalMin = data.sessions.reduce((a,s)=>a+s.minutes,0);
+    const totalTopics = data.subjects.reduce((a,s)=>a+s.topics.length,0);
+    const doneTopics = data.subjects.reduce((a,s)=>a+s.topics.filter(t=>t.done).length,0);
+    const daysStudied = new Set(data.sessions.map(s=>s.date)).size;
+    const studyStreak = currentStreak(studyStreakDates());
+    const streakLabel = 'Day streak (' + streakThresholdLabel(STREAK_THRESHOLD_MINUTES) + ')';
+    const consistency = consistencyScore();
+
+    const subjRows = data.subjects.map(s=>{
+      const total = s.topics.length, done = s.topics.filter(t=>t.done).length;
+      const min = data.sessions.filter(x=>x.subjectId===s.id).reduce((a,x)=>a+x.minutes,0);
+      return `<tr><td>${escapeHtml(s.name)}</td><td>${done}/${total}</td><td>${total ? Math.round(done/total*100) : 0}%</td><td>${(min/60).toFixed(1)}h</td></tr>`;
+    }).join('') || '<tr><td colspan="4">No subjects yet.</td></tr>';
+
+    const mockRows = data.mockTests.slice(0,15).map(m=>{
+      const pct = m.max ? Math.round(m.score/m.max*100) : null;
+      return `<tr><td>${m.date}</td><td>${escapeHtml(m.name)}</td><td>${m.subjectId ? escapeHtml(subjectName(m.subjectId)) : 'General'}</td><td>${m.score}/${m.max}</td><td>${pct!==null ? pct+'%' : '—'}</td></tr>`;
+    }).join('') || '<tr><td colspan="5">No mock tests logged yet.</td></tr>';
+
+    const genDate = new Date().toLocaleDateString('en-IN', { year:'numeric', month:'long', day:'numeric' });
+
+    document.getElementById('printReport').innerHTML = `
+      <h1>Prep for AIR-1 — Progress Report</h1>
+      <div class="meta">Generated ${genDate}${data.examDate ? ' · Exam date: '+data.examDate : ''}</div>
+      <div class="stat-line">
+        <div class="stat-box"><div class="v">${(totalMin/60).toFixed(1)}</div><div class="l">Hours invested</div></div>
+        <div class="stat-box"><div class="v">${daysStudied}</div><div class="l">Days I showed up</div></div>
+        <div class="stat-box"><div class="v">${doneTopics}/${totalTopics}</div><div class="l">Topics completed</div></div>
+        <div class="stat-box"><div class="v">${data.subjects.length}</div><div class="l">Subjects tracked</div></div>
+        <div class="stat-box"><div class="v">${studyStreak}</div><div class="l">${streakLabel}</div></div>
+        <div class="stat-box"><div class="v">${consistency}%</div><div class="l">My consistency (${CONSISTENCY_WINDOW_DAYS}d)</div></div>
+      </div>
+      <h2>Subject-wise progress</h2>
+      <table><thead><tr><th>Subject</th><th>Topics done</th><th>Completion</th><th>Hours invested</th></tr></thead><tbody>${subjRows}</tbody></table>
+      <h2>Recent mock test scores</h2>
+      <table><thead><tr><th>Date</th><th>Test</th><th>Subject</th><th>Score</th><th>%</th></tr></thead><tbody>${mockRows}</tbody></table>
+    `;
+  }
+
+  // ---------- Minimal built-in PDF writer (no external libraries/CDN) ----------
+  // Builds a valid single/multi-page PDF from simple text/rect/line drawing
+  // calls, using only the standard Helvetica font (no font embedding needed),
+  // and downloads it as a Blob. Works fully offline / inside sandboxed views.
+  function createPdfDoc(){
+    const W = 595.28, H = 841.89; // A4 in points
+    let pages = [];
+    let cur = [];
+    let font = 'F1', size = 10, color = [0,0,0];
+    const flipY = y => (H - y).toFixed(2);
+    const esc = s => String(s).replace(/[—–]/g,'-').replace(/·/g,'-').replace(/…/g,'...').replace(/[''']/g,"'").replace(/[""]/g,'"').replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[^\x20-\x7E]/g,'?');
+
+    const doc = {
+      internal: { pageSize: { getWidth: ()=>W, getHeight: ()=>H } },
+      setFont(_family, style){ font = (style === 'bold') ? 'F2' : 'F1'; },
+      setFontSize(s){ size = s; },
+      setTextColor(r,g,b){ color = [r,g,b]; },
+      setDrawColor(r,g,b){ cur.push(`${(r/255).toFixed(3)} ${(g/255).toFixed(3)} ${(b/255).toFixed(3)} RG`); },
+      setFillColor(r,g,b){ cur.push(`${(r/255).toFixed(3)} ${(g/255).toFixed(3)} ${(b/255).toFixed(3)} rg`); },
+      setLineWidth(w){ cur.push(`${w} w`); },
+      text(str, x, y){
+        const [r,g,b] = color;
+        cur.push(`${(r/255).toFixed(3)} ${(g/255).toFixed(3)} ${(b/255).toFixed(3)} rg BT /${font} ${size} Tf ${x.toFixed(2)} ${flipY(y)} Td (${esc(str)}) Tj ET`);
+      },
+      rect(x, y, w, h, mode){
+        cur.push(`${x.toFixed(2)} ${flipY(y+h)} ${w.toFixed(2)} ${h.toFixed(2)} re ${mode==='F' ? 'f' : 'S'}`);
+      },
+      roundedRect(x, y, w, h, _rx, _ry, mode){ doc.rect(x, y, w, h, mode); },
+      line(x1, y1, x2, y2){ cur.push(`${x1.toFixed(2)} ${flipY(y1)} m ${x2.toFixed(2)} ${flipY(y2)} l S`); },
+      splitTextToSize(txt, maxWidth){
+        const avgCharW = size * 0.52;
+        const maxChars = Math.max(4, Math.floor(maxWidth/avgCharW));
+        const s = String(txt);
+        return [ s.length > maxChars ? s.slice(0, maxChars-1)+'…' : s ];
+      },
+      addPage(){ pages.push(cur); cur = []; },
+      save(filename){
+        pages.push(cur);
+        const blob = buildPdfBlob(pages, W, H);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      }
+    };
+    return doc;
+  }
+
+  function buildPdfBlob(pages, W, H){
+    const numPages = pages.length;
+    const pageObjStart = 5;
+    const contentObjStart = 5 + numPages;
+    const total = 4 + numPages*2;
+
+    const objects = new Array(total);
+    objects[0] = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+    const kids = [];
+    for(let i=0;i<numPages;i++) kids.push(`${pageObjStart+i} 0 R`);
+    objects[1] = `2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${numPages} >>\nendobj\n`;
+    objects[2] = `3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`;
+    objects[3] = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n`;
+    for(let i=0;i<numPages;i++){
+      const pageObjNum = pageObjStart + i;
+      const contentObjNum = contentObjStart + i;
+      objects[pageObjNum-1] = `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W.toFixed(2)} ${H.toFixed(2)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj\n`;
+      const streamStr = pages[i].join('\n');
+      const byteLen = new TextEncoder().encode(streamStr).length;
+      objects[contentObjNum-1] = `${contentObjNum} 0 obj\n<< /Length ${byteLen} >>\nstream\n${streamStr}\nendstream\nendobj\n`;
+    }
+
+    let body = '%PDF-1.4\n';
+    const offsets = [0];
+    for(let i=0;i<objects.length;i++){
+      offsets.push(body.length);
+      body += objects[i];
+    }
+    const xrefStart = body.length;
+    let xref = `xref\n0 ${total+1}\n0000000000 65535 f \n`;
+    for(let i=1;i<=total;i++){
+      xref += String(offsets[i]).padStart(10,'0') + ' 00000 n \n';
+    }
+    const trailer = `trailer\n<< /Size ${total+1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    return new Blob([body + xref + trailer], { type: 'application/pdf' });
+  }
+
+  function generatePdfReport(){
+    const doc = createPdfDoc();
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const marginX = 40;
+    let y = 50;
+
+    const inkColor = [20,21,31], softColor = [90,95,115], lineColor = [210,213,225], headBg = [243,243,246];
+
+    function ensureSpace(need){
+      if(y + need > pageH - 40){ doc.addPage(); y = 50; }
+    }
+
+    // ---- Title ----
+    const totalMin = data.sessions.reduce((a,s)=>a+s.minutes,0);
+    const totalTopics = data.subjects.reduce((a,s)=>a+s.topics.length,0);
+    const doneTopics = data.subjects.reduce((a,s)=>a+s.topics.filter(t=>t.done).length,0);
+    const daysStudied = new Set(data.sessions.map(s=>s.date)).size;
+    const studyStreak = currentStreak(studyStreakDates());
+    const streakLabel = 'Day streak (' + streakThresholdLabel(STREAK_THRESHOLD_MINUTES) + ')';
+    const consistency = consistencyScore();
+    const genDate = new Date().toLocaleDateString('en-IN', { year:'numeric', month:'long', day:'numeric' });
+
+    doc.setTextColor(...inkColor);
+    doc.setFont('helvetica','bold'); doc.setFontSize(18);
+    doc.text('Prep for AIR-1 — Progress Report', marginX, y);
+    y += 18;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...softColor);
+    doc.text('Generated ' + genDate + (data.examDate ? ' · Exam date: ' + data.examDate : ''), marginX, y);
+    y += 26;
+
+    // ---- Stat boxes ----
+    const stats = [
+      [(totalMin/60).toFixed(1), 'Hours invested'],
+      [String(daysStudied), 'Days I showed up'],
+      [doneTopics + '/' + totalTopics, 'Topics completed'],
+      [String(data.subjects.length), 'Subjects tracked'],
+      [String(studyStreak), streakLabel],
+      [consistency + '%', 'My consistency'],
+    ];
+    const boxGap = 8;
+    const boxW = (pageW - marginX*2 - boxGap*(stats.length-1)) / stats.length;
+    const boxH = 46;
+    stats.forEach((s,i)=>{
+      const bx = marginX + i*(boxW+boxGap);
+      doc.setDrawColor(...lineColor); doc.setLineWidth(1);
+      doc.roundedRect(bx, y, boxW, boxH, 4, 4);
+      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(...inkColor);
+      doc.text(s[0], bx+10, y+22);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...softColor);
+      doc.text(s[1], bx+10, y+36);
+    });
+    y += boxH + 30;
+
+    function drawTable(title, headers, colWidths, rows){
+      ensureSpace(40);
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...inkColor);
+      doc.text(title, marginX, y);
+      y += 16;
+      const rowH = 20;
+      const tableW = colWidths.reduce((a,b)=>a+b,0);
+
+      function drawHeaderRow(){
+        doc.setFillColor(...headBg);
+        doc.rect(marginX, y, tableW, rowH, 'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...inkColor);
+        let cx = marginX;
+        headers.forEach((h,i)=>{ doc.text(h, cx+6, y+13); cx += colWidths[i]; });
+        y += rowH;
+      }
+      ensureSpace(rowH*2);
+      drawHeaderRow();
+
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...inkColor);
+      rows.forEach(r=>{
+        ensureSpace(rowH);
+        if(y === 50) drawHeaderRow();
+        doc.setDrawColor(...lineColor); doc.setLineWidth(0.6);
+        doc.line(marginX, y, marginX+tableW, y);
+        let cx = marginX;
+        r.forEach((val,i)=>{
+          const txt = String(val);
+          const maxW = colWidths[i]-10;
+          const fitted = doc.splitTextToSize(txt, maxW)[0] || '';
+          doc.text(fitted, cx+6, y+13);
+          cx += colWidths[i];
+        });
+        y += rowH;
+      });
+      y += 24;
+    }
+
+    const subjColW = [200, 100, 100, 130];
+    const subjRows = data.subjects.length ? data.subjects.map(s=>{
+      const total = s.topics.length, done = s.topics.filter(t=>t.done).length;
+      const min = data.sessions.filter(x=>x.subjectId===s.id).reduce((a,x)=>a+x.minutes,0);
+      return [s.name, done+'/'+total, (total ? Math.round(done/total*100) : 0)+'%', (min/60).toFixed(1)+'h'];
+    }) : [['No subjects yet.', '', '', '']];
+    drawTable('Subject-wise progress', ['Subject','Topics done','Completion','Hours invested'], subjColW, subjRows);
+
+    const mockColW = [80, 150, 110, 90, 80];
+    const mockRows = data.mockTests.length ? data.mockTests.slice(0,20).map(m=>{
+      const pct = m.max ? Math.round(m.score/m.max*100) : null;
+      return [m.date, m.name, m.subjectId ? subjectName(m.subjectId) : 'General', m.score+'/'+m.max, pct!==null ? pct+'%' : '—'];
+    }) : [['—','No mock tests logged yet.','','','']];
+    drawTable('Recent mock test scores', ['Date','Test','Subject','Score','%'], mockColW, mockRows);
+
+    doc.save('prep-for-air-1-report.pdf');
+  }
+
+  document.getElementById('btnDownloadPdf').addEventListener('click', ()=>{
+    generatePdfReport();
+  });
+
+  document.getElementById('btnDownloadBackup').addEventListener('click', ()=>{
+    const payload = {
+      app: 'prep-for-air-1-backup',
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      data
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'prep-for-air-1-backup-' + todayStr() + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setBackupNote('Backup downloaded just now.');
+  });
+
+  document.getElementById('btnImportBackup').addEventListener('click', ()=>{
+    document.getElementById('importFileInput').click();
+  });
+
+  let pendingImport = null;
+
+  document.getElementById('importFileInput').addEventListener('change', (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt)=>{
+      try{
+        const parsed = JSON.parse(evt.target.result);
+        const incoming = parsed && parsed.data ? parsed.data : parsed;
+        if(!incoming || !Array.isArray(incoming.sessions) || !Array.isArray(incoming.subjects)){
+          throw new Error('This file doesn\'t look like a Prep for AIR-1 backup.');
+        }
+        pendingImport = incoming;
+        setBackupNote('');
+        document.getElementById('importConfirmRow').classList.remove('hidden');
+      }catch(err){
+        console.error('Import failed', err);
+        setBackupNote('Import failed: ' + err.message, true);
+      }finally{
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('btnCancelImport').addEventListener('click', ()=>{
+    pendingImport = null;
+    document.getElementById('importConfirmRow').classList.add('hidden');
+  });
+
+  document.getElementById('btnConfirmImport').addEventListener('click', async ()=>{
+    if(!pendingImport) return;
+    const incoming = pendingImport;
+    data = {
+      subjects: incoming.subjects || [],
+      sessions: incoming.sessions || [],
+      examDate: incoming.examDate !== undefined ? incoming.examDate : null,
+      newsReadDates: incoming.newsReadDates || [],
+      answerLogs: incoming.answerLogs || [],
+      quote: incoming.quote || DEFAULT_QUOTE,
+      customSubtopics: incoming.customSubtopics || {},
+      mockTests: incoming.mockTests || [],
+      theme: incoming.theme || 'dark',
+      trendChartType: incoming.trendChartType || 'bar',
+      mockChartType: incoming.mockChartType || 'line',
+      subjectChartType: incoming.subjectChartType || 'bar',
+      dailyGoalMinutes: incoming.dailyGoalMinutes || 14*60,
+      optional: incoming.optional || null
+    };
+    ensureOptionalDefaults();
+    migrateTopicFields();
+    syncAllSubtopicsToTopics();
+    await save();
+    renderAll();
+    pendingImport = null;
+    document.getElementById('importConfirmRow').classList.add('hidden');
+    setBackupNote('Backup restored successfully.');
+  });
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      ['dashboard','today','timer','topics','upsc','optional','analysis','overview'].forEach(name=>{
+        document.getElementById('tab-'+name).classList.toggle('hidden', name !== t.dataset.tab);
+      });
+      if(t.dataset.tab === 'overview') renderOverview();
+      if(t.dataset.tab === 'upsc') renderUpsc();
+      if(t.dataset.tab === 'today') renderToday();
+      if(t.dataset.tab === 'dashboard') renderDashboard();
+      if(t.dataset.tab === 'optional') renderOptional();
+      if(t.dataset.tab === 'analysis') renderAnalysis();
+    });
+  });
+  function switchTab(name){
+    const el = document.querySelector('.tab[data-tab="'+name+'"]');
+    if(el) el.click();
+  }
+
+  function subjectName(id){
+    const s = data.subjects.find(x=>x.id===id);
+    return s ? s.name : (id ? '(deleted subject)' : 'General');
+  }
+
+  // ---------- Subject selects ----------
+  function fillSelect(sel, includeBlankLabel){
+    const prev = sel.value;
+    const blanks = sel.querySelectorAll('option[data-keep]');
+    sel.innerHTML = '';
+    if(includeBlankLabel){
+      const o = document.createElement('option'); o.value=''; o.textContent = includeBlankLabel; o.setAttribute('data-keep','1');
+      sel.appendChild(o);
+    }
+    data.subjects.forEach(s=>{
+      const opt = document.createElement('option'); opt.value = s.id; opt.textContent = s.name; sel.appendChild(opt);
+    });
+    if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  }
+
+  function refreshSubjectSelects(){
+    fillSelect(document.getElementById('manualSubject'));
+    refreshSubtopicSelect();
+    fillSelect(document.getElementById('answerSubject'));
+    fillSelect(document.getElementById('mockSubject'), 'General / Full test');
+    fillSelect(document.getElementById('mockTrendSubject'), 'All tests');
+    fillSelect(document.getElementById('filterSubject'), 'All subjects');
+  }
+
+  function refreshSubtopicSelect(){
+    const subjSel = document.getElementById('manualSubject');
+    const subSel = document.getElementById('manualSubtopic');
+    const subj = data.subjects.find(s=>s.id===subjSel.value);
+    const preset = subj ? (SUBTOPICS[subj.name] || []) : [];
+    const custom = subj ? (data.customSubtopics[subj.id] || []) : [];
+    const list = [...preset, ...custom];
+    subSel.innerHTML = '';
+    const noneOpt = document.createElement('option');
+    noneOpt.value = ''; noneOpt.textContent = list.length ? 'Subtopic (optional)' : 'No subtopics yet';
+    subSel.appendChild(noneOpt);
+    list.forEach(name=>{ const opt = document.createElement('option'); opt.value = name; opt.textContent = name; subSel.appendChild(opt); });
+  }
+  document.getElementById('manualSubject').addEventListener('change', refreshSubtopicSelect);
+
+  document.getElementById('btnAddSubtopic').addEventListener('click', ()=>{
+    if(!document.getElementById('manualSubject').value){ flashInvalid(document.getElementById('manualSubject')); return; }
+    document.getElementById('newSubtopicRow').classList.remove('hidden');
+    document.getElementById('newSubtopicInput').focus();
+  });
+  document.getElementById('btnCancelSubtopic').addEventListener('click', ()=>{
+    document.getElementById('newSubtopicInput').value = '';
+    document.getElementById('newSubtopicRow').classList.add('hidden');
+  });
+  document.getElementById('btnSaveSubtopic').addEventListener('click', async ()=>{
+    const subjectId = document.getElementById('manualSubject').value;
+    const input = document.getElementById('newSubtopicInput');
+    const name = input.value.trim();
+    if(!subjectId){ flashInvalid(document.getElementById('manualSubject')); return; }
+    if(!name){ flashInvalid(input); return; }
+    if(!data.customSubtopics[subjectId]) data.customSubtopics[subjectId] = [];
+    if(!data.customSubtopics[subjectId].includes(name)) data.customSubtopics[subjectId].push(name);
+    const subj = data.subjects.find(s=>s.id===subjectId);
+    ensureTopicFromSubtopic(subj, name);
+    await save();
+    input.value = '';
+    document.getElementById('newSubtopicRow').classList.add('hidden');
+    refreshSubtopicSelect();
+    document.getElementById('manualSubtopic').value = name;
+    renderSubjects();
+  });
+  document.getElementById('newSubtopicInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnSaveSubtopic').click(); });
+
+  // ---------- Manual log entry ----------
+  document.getElementById('btnManualAdd').addEventListener('click', async ()=>{
+    const subjectId = document.getElementById('manualSubject').value;
+    const subtopic = document.getElementById('manualSubtopic').value;
+    const topicInput = document.getElementById('manualTopic');
+    const topic = topicInput.value.trim();
+    const hoursInput = document.getElementById('manualHours');
+    const minutesInput = document.getElementById('manualMinutes');
+    const hrs = parseInt(hoursInput.value, 10) || 0;
+    const mins = parseInt(minutesInput.value, 10) || 0;
+    const minutes = hrs*60 + mins;
+    if(!subjectId){ flashInvalid(document.getElementById('manualSubject')); return; }
+    if(!topic){ flashInvalid(topicInput); return; }
+    if(minutes <= 0){ flashInvalid(hoursInput); flashInvalid(minutesInput); return; }
+    data.sessions.unshift({ id: uid(), subjectId, subtopic, topic, minutes, date: document.getElementById('manualDay').value === 'yesterday' ? yesterdayStr() : todayStr() });
+    await save();
+    topicInput.value = ''; hoursInput.value = ''; minutesInput.value = '';
+    document.getElementById('manualDay').value = 'today';
+    renderLog(); renderToday();
+  });
+
+  // ---------- Log filters ----------
+  document.getElementById('filterSubject').addEventListener('change', renderLog);
+  document.getElementById('filterFrom').addEventListener('change', renderLog);
+  document.getElementById('filterTo').addEventListener('change', renderLog);
+  document.getElementById('btnClearFilters').addEventListener('click', ()=>{
+    document.getElementById('filterSubject').value = '';
+    document.getElementById('filterFrom').value = '';
+    document.getElementById('filterTo').value = '';
+    renderLog();
+  });
+
+  function getFilteredSessions(){
+    const subj = document.getElementById('filterSubject').value;
+    const from = document.getElementById('filterFrom').value;
+    const to = document.getElementById('filterTo').value;
+    return data.sessions.filter(s=>{
+      if(subj && s.subjectId !== subj) return false;
+      if(from && s.date < from) return false;
+      if(to && s.date > to) return false;
+      return true;
+    });
+  }
+
+  document.getElementById('btnExportCsv').addEventListener('click', ()=>{
+    const rows = getFilteredSessions();
+    let csv = 'Date,Subject,Subtopic,Topic,Minutes\n';
+    rows.forEach(s=>{
+      const vals = [s.date, subjectName(s.subjectId), s.subtopic||'', s.topic||'', s.minutes];
+      csv += vals.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',') + '\n';
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'prep-for-air-1-sessions.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  function renderLog(){
+    const el = document.getElementById('logList');
+    el.innerHTML = '';
+    const rows = getFilteredSessions();
+    if(!rows.length){
+      el.innerHTML = '<div class="empty-note">No sessions match. Add one above or clear filters.</div>';
+      return;
+    }
+    const head = document.createElement('div');
+    head.className = 'log-row head';
+    head.innerHTML = '<div>Date</div><div>Subject</div><div data-col="subtopic">Subtopic</div><div>Topic</div><div class="mins">Time</div><div></div><div></div>';
+    el.appendChild(head);
+    rows.forEach(s=>{
+      if(editingSessionId === s.id){ el.appendChild(buildEditRow(s)); return; }
+      const row = document.createElement('div');
+      row.className = 'log-row';
+      row.innerHTML = `<div>${s.date}</div><div>${escapeHtml(subjectName(s.subjectId))}</div><div data-col="subtopic">${escapeHtml(s.subtopic||'—')}</div><div>${escapeHtml(s.topic||'—')}</div><div class="mins">${formatDuration(s.minutes)}</div><div></div><div></div>`;
+      const editBtn = document.createElement('button');
+      editBtn.className = 'edit-btn'; editBtn.textContent = '✎'; editBtn.title = 'Edit entry';
+      editBtn.addEventListener('click', ()=>{ editingSessionId = s.id; renderLog(); });
+      const del = document.createElement('button');
+      del.className = 'del-btn'; del.textContent = '✕'; del.title = 'Delete entry';
+      del.addEventListener('click', async ()=>{
+        const idx = data.sessions.findIndex(x=>x.id===s.id);
+        const removed = data.sessions[idx];
+        data.sessions = data.sessions.filter(x=>x.id!==s.id);
+        await save(); renderLog(); renderToday();
+        showUndoToast('Session deleted.', async ()=>{
+          data.sessions.splice(idx, 0, removed);
+          await save(); renderLog(); renderToday();
+        });
+      });
+      row.children[5].appendChild(editBtn);
+      row.children[6].appendChild(del);
+      el.appendChild(row);
+    });
+  }
+
+  function buildEditRow(s){
+    const row = document.createElement('div');
+    row.className = 'edit-row';
+    const subjSel = document.createElement('select');
+    data.subjects.forEach(sub=>{ const o=document.createElement('option'); o.value=sub.id; o.textContent=sub.name; subjSel.appendChild(o); });
+    subjSel.value = s.subjectId;
+    const subtopicInput = document.createElement('input'); subtopicInput.type='text'; subtopicInput.value = s.subtopic||''; subtopicInput.placeholder='Subtopic';
+    const topicInput = document.createElement('input'); topicInput.type='text'; topicInput.value = s.topic||''; topicInput.placeholder='Topic';
+    const hrsInput = document.createElement('input'); hrsInput.type='number'; hrsInput.min='0'; hrsInput.value = Math.floor(s.minutes/60);
+    const minInput = document.createElement('input'); minInput.type='number'; minInput.min='0'; minInput.max='59'; minInput.value = s.minutes % 60;
+    const saveBtn = document.createElement('button'); saveBtn.className='btn-primary btn-sm'; saveBtn.textContent='Save';
+    const cancelBtn = document.createElement('button'); cancelBtn.className='btn-ghost btn-sm'; cancelBtn.textContent='Cancel';
+    saveBtn.addEventListener('click', async ()=>{
+      const topic = topicInput.value.trim();
+      const hrs = parseInt(hrsInput.value,10)||0; const mins = parseInt(minInput.value,10)||0;
+      const minutes = hrs*60+mins;
+      if(!topic){ flashInvalid(topicInput); return; }
+      if(minutes<=0){ flashInvalid(hrsInput); return; }
+      s.subjectId = subjSel.value; s.subtopic = subtopicInput.value.trim(); s.topic = topic; s.minutes = minutes;
+      editingSessionId = null;
+      await save(); renderLog(); renderToday();
+    });
+    cancelBtn.addEventListener('click', ()=>{ editingSessionId = null; renderLog(); });
+    [subjSel, subtopicInput, topicInput, hrsInput, minInput, saveBtn, cancelBtn].forEach(el=>row.appendChild(el));
+    return row;
+  }
+
+  // ---------- Subjects / topics ----------
+  function progressColor(pct, total){
+    if(total === 0) return { text: 'var(--ink-faint)', bg: 'var(--surface-alt)', bar: 'var(--ink-faint)' };
+    if(pct < 25) return { text: '#F04747', bg: 'rgba(240,71,71,0.14)', bar: '#F04747' };
+    if(pct < 50) return { text: '#F5A623', bg: 'rgba(245,166,35,0.14)', bar: '#F5A623' };
+    if(pct < 75) return { text: '#E8D44D', bg: 'rgba(232,212,77,0.14)', bar: '#E8D44D' };
+    if(pct < 100) return { text: '#4FA3F7', bg: 'rgba(79,163,247,0.14)', bar: '#4FA3F7' };
+    return { text: '#34C374', bg: 'rgba(52,195,116,0.14)', bar: '#34C374' };
+  }
+
+  // Days between a stored YYYY-MM-DD date and today, in local time. Returns
+  // null when there's no date yet (e.g. a topic that's never been revised).
+  function daysSince(dateStr){
+    if(!dateStr) return null;
+    const d = new Date(dateStr + 'T00:00:00');
+    const now = new Date(); now.setHours(0,0,0,0);
+    return Math.round((now - d) / 86400000);
+  }
+
+  function formatDaysAgo(days){
+    if(days === null) return 'Never revised';
+    if(days === 0) return 'Today';
+    if(days === 1) return 'Yesterday';
+    return days + ' days ago';
+  }
+
+  // Completed topics that are due for a revision — never revised, or last
+  // revised REVISION_DUE_DAYS+ ago — sorted most-overdue first. Built purely
+  // from each topic's existing done/priority/revisionCount/lastRevised fields.
+  // Every completed topic currently due for revision — never revised, or
+  // last revised REVISION_DUE_DAYS+ ago — sorted most-overdue first, with
+  // no cap on length. buildReviewQueue() (for the on-screen list) and the
+  // dashboard's revision-health stat both derive from this.
+  function dueTopics(){
+    const items = [];
+    data.subjects.forEach(sub=>{
+      sub.topics.forEach(t=>{
+        if(!t.done) return;
+        const days = daysSince(t.lastRevised);
+        if(days !== null && days < REVISION_DUE_DAYS) return; // recently revised — not due yet
+        items.push({ subject: sub, topic: t, days });
+      });
+    });
+    items.sort((a,b)=>{
+      if(a.days === null && b.days === null) return 0;
+      if(a.days === null) return -1; // never revised is most urgent
+      if(b.days === null) return 1;
+      return b.days - a.days; // most days-ago first
+    });
+    return items;
+  }
+  function buildReviewQueue(){
+    return dueTopics().slice(0, REVIEW_QUEUE_SIZE);
+  }
+
+  function renderReviewQueue(){
+    const el = document.getElementById('reviewQueueList');
+    if(!el) return;
+    const items = buildReviewQueue();
+    if(!items.length){
+      el.innerHTML = '<div class="empty-note">Nothing due — completed topics are all freshly revised.</div>';
+      return;
+    }
+    el.innerHTML = '';
+    items.forEach(({subject, topic, days})=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      const ageColor = days === null || days >= 21 ? 'var(--danger)' : days >= 14 ? 'var(--yellow)' : 'var(--ink-soft)';
+      let badge = '';
+      if(topic.priority === 'weak') badge = ' <span class="topic-badge badge-weak">Weak</span>';
+      if(topic.priority === 'high') badge = ' <span class="topic-badge badge-high">High-wt</span>';
+      row.innerHTML = `
+        <span>${escapeHtml(topic.name)} <span style="color:var(--ink-faint); font-size:11px;">· ${escapeHtml(subject.name)}</span>${badge}</span>
+        <span style="display:flex; align-items:center; gap:10px;">
+          <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:${ageColor};">${formatDaysAgo(days)} · ${topic.revisionCount||0}x</span>
+        </span>`;
+      const reviseBtn = document.createElement('button');
+      reviseBtn.className = 'btn-ghost btn-sm'; reviseBtn.textContent = '+ Revise';
+      reviseBtn.addEventListener('click', async ()=>{
+        topic.revisionCount = (topic.revisionCount||0) + 1; topic.lastRevised = todayStr();
+        await save(); renderSubjects();
+      });
+      row.lastElementChild.appendChild(reviseBtn);
+      el.appendChild(row);
+    });
+  }
+
+  function renderSubjects(){
+    const el = document.getElementById('subjectList');
+    el.innerHTML = '';
+    renderReviewQueue();
+    if(!data.subjects.length){ el.innerHTML = '<div class="empty-note">No subjects yet. Add one below.</div>'; return; }
+
+    const groupKeys = [...GS_PAPERS, 'unassigned'];
+    groupKeys.forEach(key=>{
+      const subs = data.subjects.filter(s => (s.paper || 'unassigned') === key);
+      if(!subs.length) return;
+      const groupHead = document.createElement('div');
+      groupHead.className = 'paper-group-title';
+      groupHead.textContent = GS_PAPER_LABELS[key];
+      el.appendChild(groupHead);
+      subs.forEach(sub => renderSubjectBlock(el, sub));
+    });
+  }
+
+  function renderSubjectBlock(el, sub){
+      const total = sub.topics.length;
+      const done = sub.topics.filter(t=>t.done).length;
+      const pct = total ? Math.round(done/total*100) : 0;
+      const c = progressColor(pct, total);
+
+      const block = document.createElement('div');
+      block.className = 'subject-block';
+
+      const head = document.createElement('div');
+      head.className = 'subject-head';
+      head.innerHTML = `
+        <h3>${escapeHtml(sub.name)}</h3>
+        <div class="subject-meta">
+          <div class="progress-pill" style="color:${c.text};background:${c.bg}">${done}/${total}</div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%;background:${c.bar}"></div></div>
+          <select class="btn-sm" data-action="move-paper" title="Move to a different GS paper" style="font-family:'Sora',sans-serif; font-weight:600; font-size:11.5px; padding:5px 6px;">
+            <option value="">Unassigned</option>
+            <option value="gs1">GS Paper 1</option>
+            <option value="gs2">GS Paper 2</option>
+            <option value="gs3">GS Paper 3</option>
+            <option value="gs4">GS Paper 4</option>
+          </select>
+          <button class="icon-btn" title="Delete subject" data-action="del-subject">🗑</button>
+        </div>`;
+      head.querySelector('[data-action="move-paper"]').value = sub.paper || '';
+      block.appendChild(head);
+
+      const topicList = document.createElement('div');
+      topicList.className = 'topic-list hidden';
+
+      sub.topics.forEach(t=>{
+        const row = document.createElement('div');
+        row.className = 'topic-row';
+
+        const main = document.createElement('div');
+        main.className = 'topic-main';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.checked = !!t.done;
+        cb.addEventListener('change', async ()=>{ t.done = cb.checked; await save(); renderSubjects(); });
+        const name = document.createElement('span');
+        name.className = 'topic-name' + (t.done ? ' done' : '');
+        name.textContent = t.name;
+        main.appendChild(cb); main.appendChild(name);
+        if(t.priority === 'weak'){ const b=document.createElement('span'); b.className='topic-badge badge-weak'; b.textContent='Weak'; main.appendChild(b); }
+        if(t.priority === 'high'){ const b=document.createElement('span'); b.className='topic-badge badge-high'; b.textContent='High-wt'; main.appendChild(b); }
+        const del = document.createElement('button');
+        del.className = 'del-btn'; del.textContent = '✕'; del.title='Delete topic';
+        del.addEventListener('click', async ()=>{
+          const idx = sub.topics.findIndex(x=>x.id===t.id);
+          const removed = sub.topics[idx];
+          sub.topics = sub.topics.filter(x=>x.id!==t.id);
+          await save(); renderSubjects();
+          showUndoToast('Topic deleted.', async ()=>{
+            sub.topics.splice(idx, 0, removed);
+            await save(); renderSubjects();
+          });
+        });
+        main.appendChild(del);
+        row.appendChild(main);
+
+        const sub2 = document.createElement('div');
+        sub2.className = 'topic-sub';
+        const meta = document.createElement('span');
+        meta.className = 'meta';
+        meta.textContent = 'Revised ' + (t.revisionCount||0) + 'x' + (t.lastRevised ? ' · last ' + t.lastRevised : '');
+        const reviseBtn = document.createElement('button');
+        reviseBtn.className = 'btn-ghost btn-sm'; reviseBtn.textContent = '+ Revise';
+        reviseBtn.addEventListener('click', async ()=>{
+          t.revisionCount = (t.revisionCount||0) + 1; t.lastRevised = todayStr();
+          await save(); renderSubjects();
+        });
+        const prioritySel = document.createElement('select');
+        prioritySel.innerHTML = '<option value="">Priority</option><option value="weak">Weak area</option><option value="high">High-weightage</option>';
+        prioritySel.value = t.priority || '';
+        prioritySel.addEventListener('change', async ()=>{ t.priority = prioritySel.value || null; await save(); renderSubjects(); });
+        sub2.appendChild(meta); sub2.appendChild(reviseBtn); sub2.appendChild(prioritySel);
+        row.appendChild(sub2);
+
+        topicList.appendChild(row);
+      });
+
+      const addRow = document.createElement('div');
+      addRow.className = 'add-row';
+      const input = document.createElement('input'); input.type = 'text'; input.placeholder = 'Add a topic';
+      const addBtn = document.createElement('button'); addBtn.className = 'btn-ghost'; addBtn.textContent = 'Add';
+      const addTopic = async ()=>{
+        const v = input.value.trim(); if(!v) return;
+        sub.topics.push({ id: uid(), name: v, done:false, revisionCount:0, lastRevised:null, priority:null });
+        input.value = ''; await save(); renderSubjects();
+      };
+      addBtn.addEventListener('click', addTopic);
+      input.addEventListener('keydown', e=>{ if(e.key==='Enter') addTopic(); });
+      addRow.appendChild(input); addRow.appendChild(addBtn);
+      topicList.appendChild(addRow);
+
+      block.appendChild(topicList);
+      head.addEventListener('click', (e)=>{ if(e.target.closest('[data-action="del-subject"]') || e.target.closest('[data-action="move-paper"]')) return; topicList.classList.toggle('hidden'); });
+      head.querySelector('[data-action="del-subject"]').addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const idx = data.subjects.findIndex(x=>x.id===sub.id);
+        const removed = data.subjects[idx];
+        data.subjects = data.subjects.filter(x=>x.id!==sub.id);
+        await save();
+        renderSubjects(); refreshSubjectSelects(); renderOverview();
+        showUndoToast('Subject deleted.', async ()=>{
+          data.subjects.splice(idx, 0, removed);
+          await save();
+          renderSubjects(); refreshSubjectSelects(); renderOverview();
+        });
+      });
+      const paperSel = head.querySelector('[data-action="move-paper"]');
+      paperSel.addEventListener('click', e=> e.stopPropagation());
+      paperSel.addEventListener('change', async ()=>{
+        sub.paper = paperSel.value || null;
+        await save(); renderSubjects();
+      });
+      el.appendChild(block);
+  }
+
+  document.getElementById('btnAddSubject').addEventListener('click', async ()=>{
+    const input = document.getElementById('newSubjectName');
+    const paperSel = document.getElementById('newSubjectPaper');
+    const v = input.value.trim(); if(!v) return;
+    data.subjects.push({ id: uid(), name: v, topics: [], paper: paperSel.value || null });
+    input.value = ''; paperSel.value = ''; await save();
+    renderSubjects(); refreshSubjectSelects();
+  });
+  document.getElementById('newSubjectName').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnAddSubject').click(); });
+
+  // ---------- UPSC extras ----------
+  const examDateInput = document.getElementById('examDateInput');
+  examDateInput.addEventListener('change', async ()=>{ data.examDate = examDateInput.value || null; await save(); renderCountdown(); });
+  function renderCountdown(){
+    examDateInput.value = data.examDate || '';
+    const numEl = document.getElementById('countdownNum');
+    if(!data.examDate){ numEl.textContent = 'Set date'; return; }
+    const target = new Date(data.examDate + 'T00:00:00');
+    const now = new Date(); now.setHours(0,0,0,0);
+    const diff = Math.round((target - now) / 86400000);
+    numEl.textContent = diff >= 0 ? diff : '0';
+  }
+
+  function greetingWord(){
+    const h = new Date().getHours();
+    if(h < 12) return 'Good morning';
+    if(h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  function minutesOnDate(dateStr){
+    return data.sessions.filter(s=>s.date===dateStr).reduce((a,s)=>a+s.minutes,0);
+  }
+  function minutesInRange(a,b){
+    return data.sessions.filter(s=>s.date>=a && s.date<=b).reduce((acc,s)=>acc+s.minutes,0);
+  }
+
+  // Picks the single most relevant status message from actual tracker data —
+  // never a static/random quote. Checked in priority order: a same-day mock
+  // score drop, then a strong day, then a missed-then-unstarted day, then
+  // weekly momentum, then a neutral fallback.
+  function computeStatusMessage(){
+    const today = todayStr();
+    const yesterday = yesterdayStr();
+    const todayMin = minutesOnDate(today);
+    const yesterdayMin = minutesOnDate(yesterday);
+    const goalMin = getDailyGoal();
+
+    // Bad mock: the most recently logged mock was taken today and scored
+    // lower (by %) than the mock logged just before it.
+    if(data.mockTests.length){
+      const latest = data.mockTests[0];
+      if(latest.date === today && latest.max){
+        const prev = data.mockTests[1];
+        if(prev && prev.max){
+          const latestPct = latest.score/latest.max*100;
+          const prevPct = prev.score/prev.max*100;
+          if(latestPct < prevPct){
+            return { tone:'warn', text: 'Score dropped. Good. Now you know where the gap is.' };
+          }
+        }
+      }
+    }
+
+    // Strong day: hit a solid share of the daily goal already.
+    if(todayMin >= goalMin * 0.6){
+      return { tone:'good', text: `You showed up. ${(todayMin/60).toFixed(1)} hours. Keep the streak alive.` };
+    }
+
+    // Missed yesterday entirely and haven't started today yet.
+    if(yesterdayMin === 0 && todayMin === 0){
+      return { tone:'warn', text: "Yesterday is gone. Today isn't. Start with 30 minutes." };
+    }
+
+    // Weekly momentum: meaningful improvement over last week.
+    const thisWeekMin = minutesInRange(dateOffset(-6), dateOffset(0));
+    const lastWeekMin = minutesInRange(dateOffset(-13), dateOffset(-7));
+    if(lastWeekMin > 0){
+      const pct = Math.round((thisWeekMin - lastWeekMin) / lastWeekMin * 100);
+      if(pct >= 10){
+        return { tone:'info', text: `You're building momentum. +${pct}% study time vs last week.` };
+      }
+    }
+
+    // Neutral fallback, still data-aware.
+    if(todayMin > 0){
+      return { tone:'neutral', text: `${(todayMin/60).toFixed(1)} hours logged today. Keep building.` };
+    }
+    return { tone:'neutral', text: 'A fresh day. What will you put into it?' };
+  }
+
+  function renderTodayGreeting(){
+    const el = document.getElementById('todayGreeting');
+    if(!el) return;
+    const status = computeStatusMessage();
+    el.innerHTML = `<div class="greeting-line1">${greetingWord()}, Priyanshu.</div><div class="today-status tone-${status.tone}">${escapeHtml(status.text)}</div>`;
+  }
+
+  function currentStreak(dates){
+    const set = new Set(dates); let streak = 0; let d = new Date();
+    if(!set.has(todayStr())) d.setDate(d.getDate()-1);
+    while(true){ const ds = localDateStr(d); if(set.has(ds)){ streak++; d.setDate(d.getDate()-1); } else break; }
+    return streak;
+  }
+
+  // Total minutes logged per date, e.g. { '2026-08-12': 145 }.
+  function minutesByDateMap(){
+    const map = {};
+    data.sessions.forEach(s=>{ map[s.date] = (map[s.date] || 0) + s.minutes; });
+    return map;
+  }
+
+  // Dates that meet the 4h threshold, i.e. "productive days" — a day only
+  // counts toward the study streak once enough time is logged on it,
+  // instead of any single minute logged counting as a full streak day.
+  function studyStreakDates(){
+    const minutesByDate = minutesByDateMap();
+    return Object.keys(minutesByDate).filter(d => minutesByDate[d] >= STREAK_THRESHOLD_MINUTES);
+  }
+
+  // Consistency score: the % of the last N days (today included) on which
+  // the 4h threshold was met. Unlike the streak, one missed day doesn't
+  // reset it to zero — it just costs that one day's share of the window.
+  function consistencyScore(windowDays){
+    windowDays = windowDays || CONSISTENCY_WINDOW_DAYS;
+    const minutesByDate = minutesByDateMap();
+    let met = 0;
+    const d = new Date();
+    for(let i=0;i<windowDays;i++){
+      const ds = localDateStr(d);
+      if((minutesByDate[ds]||0) >= STREAK_THRESHOLD_MINUTES) met++;
+      d.setDate(d.getDate()-1);
+    }
+    return Math.round(met/windowDays*100);
+  }
+
+  function streakThresholdLabel(minutes){
+    minutes = minutes || 0;
+    if(minutes <= 0) return 'any session';
+    if(minutes % 60 === 0) return (minutes/60) + 'h+';
+    if(minutes < 60) return minutes + 'm+';
+    return Math.floor(minutes/60) + 'h ' + (minutes%60) + 'm+';
+  }
+
+  function renderStudyStreak(){
+    const el = document.getElementById('studyStreakNum');
+    if(!el) return;
+    el.textContent = currentStreak(studyStreakDates());
+    const lblEl = document.getElementById('studyStreakLbl');
+    if(lblEl) lblEl.textContent = 'day streak 🔥 · ' + streakThresholdLabel(STREAK_THRESHOLD_MINUTES);
+  }
+
+  function renderUpsc(){
+    const marked = data.newsReadDates.includes(todayStr());
+    const streak = currentStreak(data.newsReadDates);
+    document.getElementById('streakNum').textContent = streak;
+    document.getElementById('streakTotal').textContent = data.newsReadDates.length + ' day' + (data.newsReadDates.length===1?'':'s') + ' logged';
+    document.getElementById('streakRing').style.setProperty('--pct', Math.min(100, streak*14));
+    const btn = document.getElementById('btnMarkNews');
+    btn.textContent = marked ? "Done for today ✓" : 'Mark today done';
+    btn.disabled = marked;
+
+    const answerDates = data.answerLogs.map(a=>a.date);
+    const answerDaysLogged = new Set(answerDates).size;
+    const answerStreak = currentStreak(answerDates);
+    document.getElementById('answerStreakNum').textContent = answerStreak;
+    document.getElementById('answerStreakTotal').textContent = answerDaysLogged + ' day' + (answerDaysLogged===1?'':'s') + ' logged';
+    document.getElementById('answerStreakRing').style.setProperty('--pct', Math.min(100, answerStreak*14));
+
+    const list = document.getElementById('answerLogList');
+    list.innerHTML = '';
+    if(!data.answerLogs.length){ list.innerHTML = '<div class="empty-note">No answers logged yet.</div>'; }
+    else data.answerLogs.slice(0,10).forEach(a=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      const stars = a.rating ? '<span class="stars">'+'★'.repeat(a.rating)+'☆'.repeat(5-a.rating)+'</span>' : '';
+      row.innerHTML = `<span>${a.date} · ${escapeHtml(subjectName(a.subjectId))}${a.note?' <span class="note">— '+escapeHtml(a.note)+'</span>':''}</span><span style="display:flex;align-items:center;gap:8px;">${stars}<span class="cnt">${a.count} ans</span></span>`;
+      list.appendChild(row);
+    });
+
+    renderMockTests();
+  }
+
+  document.getElementById('btnMarkNews').addEventListener('click', async ()=>{
+    const t = todayStr();
+    if(!data.newsReadDates.includes(t)){ data.newsReadDates.unshift(t); await save(); renderUpsc(); renderToday(); }
+  });
+
+  document.getElementById('btnLogAnswers').addEventListener('click', async ()=>{
+    const subjectId = document.getElementById('answerSubject').value;
+    const input = document.getElementById('answerCount');
+    const count = parseInt(input.value, 10);
+    const ratingSel = document.getElementById('answerRating');
+    const noteInput = document.getElementById('answerNote');
+    if(!subjectId){ flashInvalid(document.getElementById('answerSubject')); return; }
+    if(!count || count <= 0){ flashInvalid(input); return; }
+    data.answerLogs.unshift({ id: uid(), date: todayStr(), subjectId, count, rating: ratingSel.value ? parseInt(ratingSel.value,10) : null, note: noteInput.value.trim() });
+    input.value = ''; ratingSel.value=''; noteInput.value = '';
+    await save(); renderUpsc(); renderToday();
+  });
+
+  document.getElementById('mockTrendSubject').addEventListener('change', renderMockTrend);
+
+  function renderMockTrend(){
+    const trendWrap = document.getElementById('mockTrendWrap');
+    const chart = document.getElementById('mockTrendChart');
+    const statsEl = document.getElementById('mockTrendStats');
+    const subjectFilter = document.getElementById('mockTrendSubject').value;
+    const scored = data.mockTests
+      .slice()
+      .reverse() // mockTests is stored newest-first; reverse to insertion (oldest-first) order
+      .filter(m => m.max > 0 && (!subjectFilter || m.subjectId === subjectFilter))
+      .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0); // stable sort keeps same-day tests in the order they were logged
+
+    document.querySelectorAll('#mockChartToggle .chart-toggle-btn').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.type === (data.mockChartType || 'line'));
+    });
+
+    if(scored.length < 2){
+      trendWrap.classList.toggle('hidden', data.mockTests.length === 0);
+      if(statsEl) statsEl.innerHTML = '';
+      chart.innerHTML = '<div class="empty-note">Log at least 2 scored tests to see a trend.</div>';
+      return;
+    }
+    trendWrap.classList.remove('hidden');
+
+    const pts = scored.map(m => Math.round(m.score/m.max*100));
+
+    if(statsEl){
+      const latest = pts[pts.length-1];
+      const avg = Math.round(pts.reduce((a,b)=>a+b,0)/pts.length);
+      const best = Math.max(...pts);
+      statsEl.innerHTML = `
+        <div class="mts-item">Latest <b>${latest}%</b></div>
+        <div class="mts-item">Average <b>${avg}%</b></div>
+        <div class="mts-item">Best <b>${best}%</b></div>
+      `;
+    }
+
+    if((data.mockChartType || 'line') === 'bar'){
+      const wrap = document.createElement('div');
+      wrap.className = 'trend-wrap';
+      scored.forEach((m,i)=>{
+        const pct = pts[i];
+        const hgt = Math.max(2, Math.round(pct/100*100));
+        const col = document.createElement('div');
+        col.className = 'trend-col';
+        const label = m.date.slice(5).split('-').reverse().join('/');
+        col.innerHTML = `<div class="trend-bar" style="height:${hgt}px;background:var(--primary)" title="${m.date} · ${escapeHtml(m.name)} — ${pct}%"></div><div class="trend-label">${label}</div>`;
+        wrap.appendChild(col);
+      });
+      chart.innerHTML = '';
+      chart.appendChild(wrap);
+      return;
+    }
+
+    const w = 640, h = 120, padX = 8, padY = 14;
+    const stepX = pts.length > 1 ? (w - padX*2) / (pts.length - 1) : 0;
+    const minP = Math.min(...pts, 0), maxP = Math.max(...pts, 100);
+    const range = Math.max(1, maxP - minP);
+    const xy = (i,v) => [padX + i*stepX, h - padY - ((v-minP)/range)*(h-padY*2)];
+
+    const linePts = pts.map((v,i)=>xy(i,v).join(',')).join(' ');
+    const areaPts = `${padX},${h-padY} ` + linePts + ` ${padX+(pts.length-1)*stepX},${h-padY}`;
+    const dots = pts.map((v,i)=>{
+      const [x,y] = xy(i,v);
+      const m = scored[i];
+      return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--primary)"><title>${m.date} · ${escapeHtml(m.name)} — ${v}%</title></circle>`;
+    }).join('');
+
+    chart.innerHTML = `
+      <svg class="mock-trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <polygon points="${areaPts}" fill="var(--primary-soft)" opacity="0.6"></polygon>
+        <polyline points="${linePts}" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+        ${dots}
+      </svg>`;
+  }
+  document.querySelectorAll('#mockChartToggle .chart-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(data.mockChartType === btn.dataset.type) return;
+      data.mockChartType = btn.dataset.type;
+      renderMockTrend();
+      await save();
+    });
+  });
+
+  function renderMockTests(){
+    renderMockTrend();
+    const list = document.getElementById('mockList');
+    list.innerHTML = '';
+    if(!data.mockTests.length){ list.innerHTML = '<div class="empty-note">No mock tests logged yet.</div>'; return; }
+    data.mockTests.slice(0,12).forEach(m=>{
+      const pct = m.max ? Math.round(m.score/m.max*100) : null;
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = `<span>${m.date} · ${escapeHtml(m.name)}${m.subjectId?' ('+escapeHtml(subjectName(m.subjectId))+')':''}${m.analysis?' <span class="analysis-tagchip">'+Math.round(m.analysis.correct/m.analysis.attempted*100)+'% acc</span>':''}</span><span style="display:flex;align-items:center;gap:10px;"><span class="cnt">${m.score}/${m.max}${pct!==null?' ('+pct+'%)':''}</span></span>`;
+      const analyseBtn = document.createElement('button');
+      analyseBtn.className='btn-ghost btn-sm'; analyseBtn.textContent = m.analysis ? 'Edit analysis' : '+ Analyse';
+      analyseBtn.addEventListener('click', ()=>{ switchTab('analysis'); });
+      const del = document.createElement('button');
+      del.className='del-btn'; del.textContent='✕'; del.title='Delete';
+      del.addEventListener('click', async ()=>{
+        const idx = data.mockTests.findIndex(x=>x.id===m.id);
+        const removed = data.mockTests[idx];
+        data.mockTests = data.mockTests.filter(x=>x.id!==m.id);
+        await save(); renderMockTests(); renderToday();
+        showUndoToast('Mock test deleted.', async ()=>{
+          data.mockTests.splice(idx, 0, removed);
+          await save(); renderMockTests(); renderToday();
+        });
+      });
+      row.lastElementChild.appendChild(analyseBtn);
+      row.lastElementChild.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById('btnLogMock').addEventListener('click', async ()=>{
+    const nameInput = document.getElementById('mockName');
+    const name = nameInput.value.trim();
+    const subjectId = document.getElementById('mockSubject').value;
+    const scoreInput = document.getElementById('mockScore');
+    const maxInput = document.getElementById('mockMax');
+    const score = parseFloat(scoreInput.value);
+    const max = parseFloat(maxInput.value);
+    if(!name){ flashInvalid(nameInput); return; }
+    if(isNaN(score)){ flashInvalid(scoreInput); return; }
+    if(isNaN(max) || max<=0){ flashInvalid(maxInput); return; }
+    data.mockTests.unshift({ id: uid(), date: todayStr(), name, subjectId: subjectId||null, score, max });
+    nameInput.value=''; scoreInput.value=''; maxInput.value='';
+    await save(); renderMockTests(); renderToday();
+  });
+
+  // ---------- Optional subject (Sociology) ----------
+  function optionalPaperLabel(p){ return p === 'paper1' ? 'Paper 1' : p === 'paper2' ? 'Paper 2' : 'Both papers'; }
+
+  // Completed optional topics due for revision — same due-date rule as the
+  // main syllabus's dueTopics(), scoped to data.optional.topics instead.
+  function optionalDueTopics(){
+    const items = [];
+    ['paper1','paper2'].forEach(p=>{
+      (data.optional.topics[p]||[]).forEach(t=>{
+        if(!t.done) return;
+        const days = daysSince(t.lastRevised);
+        if(days !== null && days < REVISION_DUE_DAYS) return;
+        items.push({ paper:p, topic:t, days });
+      });
+    });
+    items.sort((a,b)=>{
+      if(a.days === null && b.days === null) return 0;
+      if(a.days === null) return -1;
+      if(b.days === null) return 1;
+      return b.days - a.days;
+    });
+    return items;
+  }
+
+  function renderOptionalRevisionQueue(){
+    const el = document.getElementById('optionalRevisionList');
+    if(!el) return;
+    const items = optionalDueTopics().slice(0, REVIEW_QUEUE_SIZE);
+    if(!items.length){ el.innerHTML = '<div class="empty-note">Nothing due — completed topics are all freshly revised.</div>'; return; }
+    el.innerHTML = '';
+    items.forEach(({paper, topic, days})=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      const ageColor = days === null || days >= 21 ? 'var(--danger)' : days >= 14 ? 'var(--yellow)' : 'var(--ink-soft)';
+      let badge = '';
+      if(topic.priority === 'weak') badge = ' <span class="topic-badge badge-weak">Weak</span>';
+      if(topic.priority === 'high') badge = ' <span class="topic-badge badge-high">High-wt</span>';
+      row.innerHTML = `
+        <span>${escapeHtml(topic.name)} <span style="color:var(--ink-faint); font-size:11px;">· ${optionalPaperLabel(paper)}</span>${badge}</span>
+        <span style="display:flex; align-items:center; gap:10px;">
+          <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:${ageColor};">${formatDaysAgo(days)} · ${topic.revisionCount||0}x</span>
+        </span>`;
+      const reviseBtn = document.createElement('button');
+      reviseBtn.className = 'btn-ghost btn-sm'; reviseBtn.textContent = '+ Revise';
+      reviseBtn.addEventListener('click', async ()=>{
+        topic.revisionCount = (topic.revisionCount||0) + 1; topic.lastRevised = todayStr();
+        await save(); renderOptional();
+      });
+      row.lastElementChild.appendChild(reviseBtn);
+      el.appendChild(row);
+    });
+  }
+
+  function renderOptionalTopicList(paperKey, elId){
+    const el = document.getElementById(elId);
+    const topics = data.optional.topics[paperKey];
+    el.innerHTML = '';
+    if(!topics.length){ el.innerHTML = '<div class="empty-note">No topics yet. Add one below.</div>'; }
+    topics.forEach(t=>{
+      const row = document.createElement('div');
+      row.className = 'topic-row';
+
+      const main = document.createElement('div');
+      main.className = 'topic-main';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !!t.done;
+      cb.addEventListener('change', async ()=>{ t.done = cb.checked; await save(); renderOptional(); });
+      const name = document.createElement('span');
+      name.className = 'topic-name' + (t.done ? ' done' : '');
+      name.textContent = t.name;
+      main.appendChild(cb); main.appendChild(name);
+      if(t.priority === 'weak'){ const b=document.createElement('span'); b.className='topic-badge badge-weak'; b.textContent='Weak'; main.appendChild(b); }
+      if(t.priority === 'high'){ const b=document.createElement('span'); b.className='topic-badge badge-high'; b.textContent='High-wt'; main.appendChild(b); }
+      const del = document.createElement('button');
+      del.className = 'del-btn'; del.textContent = '✕'; del.title='Delete topic';
+      del.addEventListener('click', async ()=>{
+        const idx = topics.findIndex(x=>x.id===t.id);
+        const removed = topics[idx];
+        data.optional.topics[paperKey] = topics.filter(x=>x.id!==t.id);
+        await save(); renderOptional();
+        showUndoToast('Topic deleted.', async ()=>{
+          data.optional.topics[paperKey].splice(idx, 0, removed);
+          await save(); renderOptional();
+        });
+      });
+      main.appendChild(del);
+      row.appendChild(main);
+
+      const sub2 = document.createElement('div');
+      sub2.className = 'topic-sub';
+      const meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = 'Revised ' + (t.revisionCount||0) + 'x' + (t.lastRevised ? ' · last ' + t.lastRevised : '');
+      const reviseBtn = document.createElement('button');
+      reviseBtn.className = 'btn-ghost btn-sm'; reviseBtn.textContent = '+ Revise';
+      reviseBtn.addEventListener('click', async ()=>{
+        t.revisionCount = (t.revisionCount||0) + 1; t.lastRevised = todayStr();
+        await save(); renderOptional();
+      });
+      const prioritySel = document.createElement('select');
+      prioritySel.innerHTML = '<option value="">Priority</option><option value="weak">Weak area</option><option value="high">High-weightage</option>';
+      prioritySel.value = t.priority || '';
+      prioritySel.addEventListener('change', async ()=>{ t.priority = prioritySel.value || null; await save(); renderOptional(); });
+      sub2.appendChild(meta); sub2.appendChild(reviseBtn); sub2.appendChild(prioritySel);
+      row.appendChild(sub2);
+
+      el.appendChild(row);
+    });
+  }
+
+  document.getElementById('btnAddOptionalTopicP1').addEventListener('click', async ()=>{
+    const input = document.getElementById('newOptionalTopicP1');
+    const v = input.value.trim(); if(!v) return;
+    data.optional.topics.paper1.push({ id: uid(), name: v, done:false, revisionCount:0, lastRevised:null, priority:null });
+    input.value = ''; await save(); renderOptional();
+  });
+  document.getElementById('newOptionalTopicP1').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnAddOptionalTopicP1').click(); });
+  document.getElementById('btnAddOptionalTopicP2').addEventListener('click', async ()=>{
+    const input = document.getElementById('newOptionalTopicP2');
+    const v = input.value.trim(); if(!v) return;
+    data.optional.topics.paper2.push({ id: uid(), name: v, done:false, revisionCount:0, lastRevised:null, priority:null });
+    input.value = ''; await save(); renderOptional();
+  });
+  document.getElementById('newOptionalTopicP2').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnAddOptionalTopicP2').click(); });
+
+  function renderOptionalPyqList(){
+    const list = document.getElementById('optionalPyqList');
+    if(!data.optional.pyqLogs.length){ list.innerHTML = '<div class="empty-note">No PYQs logged yet.</div>'; return; }
+    list.innerHTML = '';
+    data.optional.pyqLogs.slice(0,10).forEach(p=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = `<span>${p.date} · ${optionalPaperLabel(p.paper)}${p.note?' <span class="note">— '+escapeHtml(p.note)+'</span>':''}</span><span style="display:flex;align-items:center;gap:8px;"><span class="cnt">${p.count} q</span></span>`;
+      const del = document.createElement('button');
+      del.className='del-btn'; del.textContent='✕'; del.title='Delete';
+      del.addEventListener('click', async ()=>{
+        const idx = data.optional.pyqLogs.findIndex(x=>x.id===p.id);
+        const removed = data.optional.pyqLogs[idx];
+        data.optional.pyqLogs = data.optional.pyqLogs.filter(x=>x.id!==p.id);
+        await save(); renderOptional();
+        showUndoToast('PYQ log deleted.', async ()=>{
+          data.optional.pyqLogs.splice(idx, 0, removed);
+          await save(); renderOptional();
+        });
+      });
+      row.lastElementChild.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+  document.getElementById('btnLogOptionalPyq').addEventListener('click', async ()=>{
+    const paper = document.getElementById('optionalPyqPaper').value;
+    const input = document.getElementById('optionalPyqCount');
+    const count = parseInt(input.value, 10);
+    const noteInput = document.getElementById('optionalPyqNote');
+    if(!count || count <= 0){ flashInvalid(input); return; }
+    data.optional.pyqLogs.unshift({ id: uid(), date: todayStr(), paper, count, note: noteInput.value.trim() });
+    input.value = ''; noteInput.value = '';
+    await save(); renderOptional();
+  });
+
+  function renderOptionalAnswerLog(){
+    const answerDates = data.optional.answerLogs.map(a=>a.date);
+    const answerDaysLogged = new Set(answerDates).size;
+    const answerStreak = currentStreak(answerDates);
+    document.getElementById('optionalAnswerStreakNum').textContent = answerStreak;
+    document.getElementById('optionalAnswerStreakTotal').textContent = answerDaysLogged + ' day' + (answerDaysLogged===1?'':'s') + ' logged';
+    document.getElementById('optionalAnswerStreakRing').style.setProperty('--pct', Math.min(100, answerStreak*14));
+
+    const list = document.getElementById('optionalAnswerLogList');
+    list.innerHTML = '';
+    if(!data.optional.answerLogs.length){ list.innerHTML = '<div class="empty-note">No answers logged yet.</div>'; return; }
+    data.optional.answerLogs.slice(0,10).forEach(a=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      const stars = a.rating ? '<span class="stars">'+'★'.repeat(a.rating)+'☆'.repeat(5-a.rating)+'</span>' : '';
+      row.innerHTML = `<span>${a.date} · ${optionalPaperLabel(a.paper)}${a.note?' <span class="note">— '+escapeHtml(a.note)+'</span>':''}</span><span style="display:flex;align-items:center;gap:8px;">${stars}<span class="cnt">${a.count} ans</span></span>`;
+      list.appendChild(row);
+    });
+  }
+  document.getElementById('btnLogOptionalAnswers').addEventListener('click', async ()=>{
+    const paper = document.getElementById('optionalAnswerPaper').value;
+    const input = document.getElementById('optionalAnswerCount');
+    const count = parseInt(input.value, 10);
+    const ratingSel = document.getElementById('optionalAnswerRating');
+    const noteInput = document.getElementById('optionalAnswerNote');
+    if(!count || count <= 0){ flashInvalid(input); return; }
+    data.optional.answerLogs.unshift({ id: uid(), date: todayStr(), paper, count, rating: ratingSel.value ? parseInt(ratingSel.value,10) : null, note: noteInput.value.trim() });
+    input.value=''; ratingSel.value=''; noteInput.value='';
+    await save(); renderOptional();
+  });
+
+  function renderOptionalMockList(){
+    const statsEl = document.getElementById('optionalMockStats');
+    const scored = data.optional.mockTests.filter(m=>m.max>0);
+    if(scored.length){
+      const pts = scored.map(m=>Math.round(m.score/m.max*100));
+      const avg = Math.round(pts.reduce((a,b)=>a+b,0)/pts.length);
+      statsEl.innerHTML = `<span class="mts-item">Average <b>${avg}%</b></span> <span class="mts-item">Tests <b>${scored.length}</b></span>`;
+    } else {
+      statsEl.innerHTML = '';
+    }
+    const list = document.getElementById('optionalMockList');
+    list.innerHTML = '';
+    if(!data.optional.mockTests.length){ list.innerHTML = '<div class="empty-note">No mock tests logged yet.</div>'; return; }
+    data.optional.mockTests.slice(0,12).forEach(m=>{
+      const pct = m.max ? Math.round(m.score/m.max*100) : null;
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = `<span>${m.date} · ${escapeHtml(m.name)}${m.paper?' ('+optionalPaperLabel(m.paper)+')':''}${m.analysis?' <span class="analysis-tagchip">'+Math.round(m.analysis.correct/m.analysis.attempted*100)+'% acc</span>':''}</span><span style="display:flex;align-items:center;gap:10px;"><span class="cnt">${m.score}/${m.max}${pct!==null?' ('+pct+'%)':''}</span></span>`;
+      const analyseBtn = document.createElement('button');
+      analyseBtn.className='btn-ghost btn-sm'; analyseBtn.textContent = m.analysis ? 'Edit analysis' : '+ Analyse';
+      analyseBtn.addEventListener('click', ()=>{ switchTab('analysis'); });
+      const del = document.createElement('button');
+      del.className='del-btn'; del.textContent='✕'; del.title='Delete';
+      del.addEventListener('click', async ()=>{
+        const idx = data.optional.mockTests.findIndex(x=>x.id===m.id);
+        const removed = data.optional.mockTests[idx];
+        data.optional.mockTests = data.optional.mockTests.filter(x=>x.id!==m.id);
+        await save(); renderOptional();
+        showUndoToast('Mock test deleted.', async ()=>{
+          data.optional.mockTests.splice(idx, 0, removed);
+          await save(); renderOptional();
+        });
+      });
+      row.lastElementChild.appendChild(analyseBtn);
+      row.lastElementChild.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  // ---------- Mock analysis ----------
+  const REASON_KEYS = [
+    { key:'conceptGap', label:'Concept gap', cls:'concept', color:'#F04747' },
+    { key:'silly',       label:'Silly mistake', cls:'silly',   color:'#F5A623' },
+    { key:'guess',       label:'Guess',       cls:'guess',   color:'#4FA3F7' },
+    { key:'timePressure',label:'Time pressure', cls:'time',  color:'#34C374' },
+  ];
+  let openAnalysisId = null;
+
+  function getAllMocks(){
+    const gs = data.mockTests.map(m => ({ mock:m, source:'GS Mock', label: m.name + (m.subjectId ? ' ('+subjectName(m.subjectId)+')' : '') }));
+    const opt = data.optional.mockTests.map(m => ({ mock:m, source:'Optional Mock', label: m.name + (m.paper ? ' ('+optionalPaperLabel(m.paper)+')' : '') }));
+    return gs.concat(opt).sort((a,b)=> b.mock.date.localeCompare(a.mock.date));
+  }
+
+  function renderAnalysis(){
+    const all = getAllMocks();
+    const analysed = all.filter(e => e.mock.analysis);
+
+    const totals = { conceptGap:0, silly:0, guess:0, timePressure:0 };
+    let sumAttempted = 0, sumCorrect = 0, sumWrong = 0;
+    analysed.forEach(e=>{
+      const a = e.mock.analysis;
+      sumAttempted += a.attempted; sumCorrect += a.correct; sumWrong += a.wrong;
+      REASON_KEYS.forEach(r => totals[r.key] += (a.tags[r.key]||0));
+    });
+    const overallAcc = sumAttempted ? Math.round(sumCorrect/sumAttempted*100) : null;
+
+    document.getElementById('analysisStatGrid').innerHTML = `
+      <div class="stat-card"><div class="v">${analysed.length}</div><div class="l">Mocks analysed</div></div>
+      <div class="stat-card"><div class="v">${overallAcc!==null ? overallAcc+'%' : '—'}</div><div class="l">Overall accuracy</div></div>
+      <div class="stat-card"><div class="v">${sumWrong}</div><div class="l">Total wrong answers</div></div>
+      <div class="stat-card"><div class="v">${sumCorrect}/${sumAttempted}</div><div class="l">Correct / attempted</div></div>
+    `;
+
+    const barWrap = document.getElementById('reasonBarWrap');
+    const legend = document.getElementById('reasonLegend');
+    const totalTagged = REASON_KEYS.reduce((a,r)=>a+totals[r.key],0);
+    barWrap.innerHTML = ''; legend.innerHTML = '';
+    if(!totalTagged){
+      barWrap.style.display = 'none';
+      legend.innerHTML = '<span style="color:var(--ink-faint);">Analyse a mock below to see where marks are being lost.</span>';
+    } else {
+      barWrap.style.display = 'flex';
+      REASON_KEYS.forEach(r=>{
+        const pct = Math.round(totals[r.key]/totalTagged*100);
+        if(pct > 0){
+          const seg = document.createElement('div');
+          seg.className = 'reason-bar-seg';
+          seg.style.width = pct + '%';
+          seg.style.background = r.color;
+          seg.title = r.label + ': ' + totals[r.key] + ' (' + pct + '%)';
+          barWrap.appendChild(seg);
+        }
+        const item = document.createElement('span');
+        item.innerHTML = `<i style="background:${r.color}"></i>${r.label}: <b style="color:var(--ink);">${totals[r.key]}</b>`;
+        legend.appendChild(item);
+      });
+    }
+
+    const list = document.getElementById('analysisList');
+    list.innerHTML = '';
+    if(!all.length){ list.innerHTML = '<div class="empty-note">Log a mock test in UPSC or Optional first, then come back here to analyse it.</div>'; return; }
+    all.slice(0,25).forEach(entry => list.appendChild(buildAnalysisRow(entry)));
+  }
+
+  function buildAnalysisRow(entry){
+    const m = entry.mock;
+    const pct = m.max ? Math.round(m.score/m.max*100) : null;
+    const block = document.createElement('div');
+    block.className = 'analysis-row';
+
+    const head = document.createElement('div');
+    head.className = 'analysis-row-head';
+    const acc = m.analysis ? Math.round(m.analysis.correct/m.analysis.attempted*100) : null;
+    const accColor = acc===null ? null : (acc<40?'#F04747':acc<60?'#F5A623':acc<80?'#4FA3F7':'#34C374');
+    head.innerHTML = `
+      <div>
+        <div class="name">${escapeHtml(m.name)} <span class="meta">· ${entry.source} · ${m.date}</span></div>
+        <div class="analysis-summary" style="margin-top:4px;">
+          <span>${m.score}/${m.max}${pct!==null?' ('+pct+'%)':''}</span>
+          ${m.analysis ? `<span class="acc-pill" style="color:${accColor};background:${accColor}22;">${acc}% accuracy</span><span>${m.analysis.attempted} attempted · ${m.analysis.correct}✓ ${m.analysis.wrong}✗</span>` : '<span style="color:var(--ink-faint);">Not analysed yet</span>'}
+        </div>
+      </div>
+      <button class="btn-ghost btn-sm" data-action="toggle">${m.analysis ? 'Edit' : '+ Add analysis'}</button>
+    `;
+    block.appendChild(head);
+
+    const formWrap = document.createElement('div');
+    formWrap.className = 'analysis-form hidden';
+    formWrap.appendChild(buildAnalysisForm(m));
+    block.appendChild(formWrap);
+
+    head.querySelector('[data-action="toggle"]').addEventListener('click', ()=>{
+      const isHidden = formWrap.classList.contains('hidden');
+      formWrap.classList.toggle('hidden', !isHidden);
+      openAnalysisId = isHidden ? m.id : null;
+    });
+    if(openAnalysisId === m.id) formWrap.classList.remove('hidden');
+
+    return block;
+  }
+
+  function buildAnalysisForm(m){
+    const wrap = document.createElement('div');
+    const a = m.analysis || { attempted:'', correct:'', wrong:'', tags:{ conceptGap:'', silly:'', guess:'', timePressure:'' } };
+
+    const row1 = document.createElement('div');
+    row1.className = 'form-row';
+    const attemptedField = buildField('Attempted', a.attempted);
+    const correctField = buildField('Correct', a.correct);
+    const wrongField = buildField('Wrong', a.wrong);
+    row1.appendChild(attemptedField.wrap); row1.appendChild(correctField.wrap); row1.appendChild(wrongField.wrap);
+    wrap.appendChild(row1);
+
+    const accNote = document.createElement('p');
+    accNote.className = 'section-sub'; accNote.style.margin = '8px 0 0';
+    wrap.appendChild(accNote);
+    function updateAcc(){
+      const att = parseInt(attemptedField.input.value,10) || 0;
+      const cor = parseInt(correctField.input.value,10) || 0;
+      accNote.textContent = att > 0 ? 'Accuracy: ' + Math.round(cor/att*100) + '%' : 'Accuracy: —';
+    }
+    attemptedField.input.addEventListener('input', ()=>{
+      const att = parseInt(attemptedField.input.value,10)||0, cor = parseInt(correctField.input.value,10)||0;
+      wrongField.input.value = Math.max(0, att - cor);
+      updateAcc();
+    });
+    correctField.input.addEventListener('input', ()=>{
+      const att = parseInt(attemptedField.input.value,10)||0, cor = parseInt(correctField.input.value,10)||0;
+      wrongField.input.value = Math.max(0, att - cor);
+      updateAcc();
+    });
+    updateAcc();
+
+    const reasonLabel = document.createElement('p');
+    reasonLabel.className = 'section-sub'; reasonLabel.style.margin = '14px 0 0';
+    reasonLabel.textContent = 'Why were marks lost? (should roughly add up to "Wrong")';
+    wrap.appendChild(reasonLabel);
+
+    const reasonGrid = document.createElement('div');
+    reasonGrid.className = 'reason-grid';
+    const reasonFields = {};
+    REASON_KEYS.forEach(r=>{
+      const f = document.createElement('div');
+      f.className = 'reason-field ' + r.cls;
+      const lbl = document.createElement('label'); lbl.textContent = r.label;
+      const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.value = a.tags[r.key] !== undefined ? a.tags[r.key] : '';
+      f.appendChild(lbl); f.appendChild(inp);
+      reasonGrid.appendChild(f);
+      reasonFields[r.key] = inp;
+    });
+    wrap.appendChild(reasonGrid);
+
+    const actions = document.createElement('div');
+    actions.className = 'form-row';
+    const saveBtn = document.createElement('button'); saveBtn.className = 'btn-primary btn-sm'; saveBtn.textContent = 'Save analysis';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-ghost btn-sm'; cancelBtn.textContent = 'Cancel';
+    actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+    wrap.appendChild(actions);
+
+    saveBtn.addEventListener('click', async ()=>{
+      const attempted = parseInt(attemptedField.input.value,10);
+      const correct = parseInt(correctField.input.value,10);
+      const wrong = parseInt(wrongField.input.value,10);
+      if(!attempted || attempted<=0){ flashInvalid(attemptedField.input); return; }
+      if(isNaN(correct) || correct<0 || correct>attempted){ flashInvalid(correctField.input); return; }
+      const tags = {};
+      REASON_KEYS.forEach(r=>{ tags[r.key] = parseInt(reasonFields[r.key].value,10) || 0; });
+      m.analysis = { attempted, correct, wrong: isNaN(wrong)?Math.max(0,attempted-correct):wrong, tags };
+      openAnalysisId = null;
+      await save();
+      renderAnalysis(); renderMockTests(); renderOptionalMockList();
+    });
+    cancelBtn.addEventListener('click', ()=>{ openAnalysisId = null; renderAnalysis(); });
+
+    function buildField(label, value){
+      const w = document.createElement('div'); w.className = 'analysis-field';
+      const l = document.createElement('label'); l.textContent = label;
+      const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.value = value;
+      w.appendChild(l); w.appendChild(i);
+      return { wrap: w, input: i };
+    }
+    return wrap;
+  }
+
+  document.getElementById('btnLogOptionalMock').addEventListener('click', async ()=>{
+    const nameInput = document.getElementById('optionalMockName');
+    const name = nameInput.value.trim();
+    const paper = document.getElementById('optionalMockPaper').value;
+    const scoreInput = document.getElementById('optionalMockScore');
+    const maxInput = document.getElementById('optionalMockMax');
+    const score = parseFloat(scoreInput.value);
+    const max = parseFloat(maxInput.value);
+    if(!name){ flashInvalid(nameInput); return; }
+    if(isNaN(score)){ flashInvalid(scoreInput); return; }
+    if(isNaN(max) || max<=0){ flashInvalid(maxInput); return; }
+    data.optional.mockTests.unshift({ id: uid(), date: todayStr(), name, paper: paper||null, score, max });
+    nameInput.value=''; scoreInput.value=''; maxInput.value='';
+    await save(); renderOptional();
+  });
+
+  // Readiness is a plain average of whichever of these three are actually
+  // available yet (syllabus coverage, revision health, mock average) — so
+  // it's honest about being partial in the early weeks, rather than
+  // treating a missing component as a zero.
+  function renderOptional(){
+    document.getElementById('optionalSubjectName').textContent = (data.optional.name || 'Sociology').toUpperCase();
+
+    const p1 = data.optional.topics.paper1, p2 = data.optional.topics.paper2;
+    const p1Done = p1.filter(t=>t.done).length, p2Done = p2.filter(t=>t.done).length;
+    const p1Pct = p1.length ? Math.round(p1Done/p1.length*100) : 0;
+    const p2Pct = p2.length ? Math.round(p2Done/p2.length*100) : 0;
+    const totalTopics = p1.length + p2.length;
+    const doneTopics = p1Done + p2Done;
+    const syllabusPct = totalTopics ? Math.round(doneTopics/totalTopics*100) : null;
+
+    const dueCount = optionalDueTopics().length;
+    const revisionHealth = doneTopics ? Math.round((doneTopics-dueCount)/doneTopics*100) : null;
+
+    const scoredMocks = data.optional.mockTests.filter(m=>m.max>0);
+    const mockAvg = scoredMocks.length ? Math.round(scoredMocks.reduce((a,m)=>a+(m.score/m.max*100),0)/scoredMocks.length) : null;
+
+    const components = [syllabusPct, revisionHealth, mockAvg].filter(v=>v !== null);
+    const readiness = components.length ? Math.round(components.reduce((a,b)=>a+b,0)/components.length) : null;
+
+    document.getElementById('optionalStatGrid').innerHTML = `
+      <div class="stat-card"><div class="v">${p1Pct}%</div><div class="l">Paper 1</div></div>
+      <div class="stat-card"><div class="v">${p2Pct}%</div><div class="l">Paper 2</div></div>
+      <div class="stat-card"><div class="v">${readiness===null ? '—' : readiness+'%'}</div><div class="l">Optional readiness</div></div>
+    `;
+
+    renderOptionalTopicList('paper1', 'optionalTopicsP1');
+    renderOptionalTopicList('paper2', 'optionalTopicsP2');
+    renderOptionalRevisionQueue();
+    renderOptionalPyqList();
+    renderOptionalAnswerLog();
+    renderOptionalMockList();
+  }
+
+  // ---------- Today ----------
+  function renderToday(){
+    renderTodayGreeting();
+    const t = todayStr();
+    const todaySessions = data.sessions.filter(s=>s.date===t);
+    const totalMin = todaySessions.reduce((a,s)=>a+s.minutes,0);
+    const newsD = data.newsReadDates.includes(t);
+    const answersToday = data.answerLogs.filter(a=>a.date===t).reduce((a,x)=>a+x.count,0);
+    const mocksToday = data.mockTests.filter(m=>m.date===t).length;
+    const goalHours = (totalMin/60).toFixed(1);
+    const goalMin = getDailyGoal();
+    const dailyGoalHours = goalMin/60;
+
+    document.getElementById('todayHero').innerHTML = `
+      <div class="stat-card"><div class="v" style="color:${totalMin >= goalMin ? 'var(--success)' : 'var(--yellow)'}">${formatDuration(totalMin)}</div><div class="l">Studied today</div></div>
+      <div class="stat-card"><div class="v" style="color:${newsD ? 'var(--success)' : 'var(--danger)'}">${newsD ? 'Yes ✓' : 'No ✕'}</div><div class="l">Current affairs read</div></div>
+      <div class="stat-card"><div class="v">${answersToday}</div><div class="l">Answers written today</div></div>
+      <div class="stat-card"><div class="v">${mocksToday}</div><div class="l">Mock tests today</div></div>
+      <div class="stat-card"><div class="v" style="color:${totalMin >= goalMin ? 'var(--success)' : 'var(--yellow)'}">${goalHours}h / ${dailyGoalHours}h</div><div class="l">Daily goal</div></div>
+    `;
+
+    const list = document.getElementById('todaySessions');
+    list.innerHTML = '';
+    if(!todaySessions.length){ list.innerHTML = '<div class="empty-note">Nothing logged yet today. Head to the Log tab.</div>'; renderStudyStreak(); renderDailyGoal(); return; }
+    todaySessions.forEach(s=>{
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = `<span>${escapeHtml(subjectName(s.subjectId))}${s.subtopic?' · '+escapeHtml(s.subtopic):''} — ${escapeHtml(s.topic||'')}</span><span class="cnt">${formatDuration(s.minutes)}</span>`;
+      list.appendChild(row);
+    });
+    renderStudyStreak();
+    renderDailyGoal();
+  }
+
+  // ---------- Overview ----------
+  function trendColor(minutes){
+    const hrs = minutes / 60;
+    if(hrs < 4) return '#F28B8B';   // light red
+    if(hrs < 8) return '#E8D44D';   // yellow
+    if(hrs < 12) return '#8FCBF2';  // light blue
+    return '#34C374';               // green
+  }
+  function renderTrend(){
+    const wrap = document.getElementById('trendChart');
+    wrap.innerHTML = '';
+    const days = [];
+    for(let i=13;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); days.push(localDateStr(d)); }
+    const totals = days.map(ds => data.sessions.filter(s=>s.date===ds).reduce((a,s)=>a+s.minutes,0));
+    const max = Math.max(1, ...totals);
+    const labels = days.map(ds => ds.slice(5).split('-').reverse().join('/'));
+
+    document.querySelectorAll('#trendChartToggle .chart-toggle-btn').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.type === (data.trendChartType || 'bar'));
+    });
+
+    if((data.trendChartType || 'bar') === 'line'){
+      wrap.classList.add('line-mode');
+      const w = 700, h = 120, padX = 14, padY = 10;
+      const innerW = w - padX*2, innerH = h - padY*2;
+      const pts = totals.map((t,i)=>{
+        const x = padX + (totals.length===1 ? innerW/2 : (i/(totals.length-1))*innerW);
+        const y = padY + innerH - (t/max*innerH);
+        return {x, y, t};
+      });
+      const linePath = pts.map((p,i)=> (i===0?'M':'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+      const areaPath = linePath + ` L${pts[pts.length-1].x.toFixed(1)} ${h-padY} L${pts[0].x.toFixed(1)} ${h-padY} Z`;
+      const dots = pts.map((p,i)=> `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" fill="${trendColor(totals[i])}" stroke="var(--surface)" stroke-width="1.5"><title>${formatDuration(totals[i])}</title></circle>`).join('');
+      wrap.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100px;overflow:visible;">
+          <defs>
+            <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="${areaPath}" fill="url(#trendFill)" stroke="none"/>
+          <path d="${linePath}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          ${dots}
+        </svg>
+        <div style="display:flex; justify-content:space-between; margin-top:6px;">
+          ${labels.map(l=>`<div class="trend-label">${l}</div>`).join('')}
+        </div>`;
+    } else {
+      wrap.classList.remove('line-mode');
+      days.forEach((ds,i)=>{
+        const col = document.createElement('div');
+        col.className = 'trend-col';
+        const hgt = Math.max(2, Math.round(totals[i]/max*100));
+        col.innerHTML = `<div class="trend-bar" style="height:${hgt}px;background:${trendColor(totals[i])}" title="${formatDuration(totals[i])}"></div><div class="trend-label">${labels[i]}</div>`;
+        wrap.appendChild(col);
+      });
+    }
+  }
+
+  function dateOffset(n){ const d = new Date(); d.setDate(d.getDate()+n); return localDateStr(d); }
+
+  function canvasToPngDownload(canvas, filename){
+    // Prefer toBlob, but fall back to toDataURL (some sandboxed/embedded
+    // browser contexts restrict toBlob or its callback but still allow this).
+    const triggerDownload = (href)=>{
+      const a = document.createElement('a');
+      a.href = href; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      if(href.startsWith('blob:')) setTimeout(()=>URL.revokeObjectURL(href), 1000);
+    };
+    try{
+      if(canvas.toBlob){
+        canvas.toBlob(blob=>{
+          if(blob){ triggerDownload(URL.createObjectURL(blob)); }
+          else { triggerDownload(canvas.toDataURL('image/png')); }
+        }, 'image/png');
+      } else {
+        triggerDownload(canvas.toDataURL('image/png'));
+      }
+    }catch(e){
+      try{ triggerDownload(canvas.toDataURL('image/png')); }
+      catch(e2){ console.error('PNG export failed', e2); alert('Could not export PNG in this browser/view. Try opening the app in a full browser tab.'); }
+    }
+  }
+
+  function exportTrendChartPNG(){
+    const days = [];
+    for(let i=13;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); days.push(localDateStr(d)); }
+    const totals = days.map(ds => data.sessions.filter(s=>s.date===ds).reduce((a,s)=>a+s.minutes,0));
+    const labels = days.map(ds => ds.slice(5).split('-').reverse().join('/'));
+    const max = Math.max(1, ...totals);
+
+    const cs = getComputedStyle(document.body);
+    const colInk = (cs.getPropertyValue('--ink')||'').trim() || '#EDEEF3';
+    const colFaint = (cs.getPropertyValue('--ink-faint')||'').trim() || '#6B6F82';
+    const colSurface = (cs.getPropertyValue('--surface')||'').trim() || '#1E212C';
+    const colPrimary = (cs.getPropertyValue('--primary')||'').trim() || '#7C6FF2';
+
+    // Render straight onto a <canvas> with the 2D API (no SVG/Image/blob
+    // round-trip) so this works even inside sandboxed iframes that block
+    // cross-context image loads or taint the canvas.
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = 800, h = 320, padTop = 50, padBottom = 40, padX = 40;
+    const chartH = h - padTop - padBottom;
+    const chartW = w - padX*2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    ctx.fillStyle = colSurface;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = colInk;
+    ctx.font = "700 16px 'Sora', sans-serif";
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('Last 14 days', padX, 30);
+
+    if((data.trendChartType || 'bar') === 'line'){
+      const pts = totals.map((t,i)=>{
+        const x = padX + (totals.length===1 ? chartW/2 : (i/(totals.length-1))*chartW);
+        const y = padTop + chartH - (t/max*chartH);
+        return {x, y};
+      });
+      ctx.beginPath();
+      pts.forEach((p,i)=>{ if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
+      ctx.lineTo(pts[pts.length-1].x, padTop+chartH);
+      ctx.lineTo(pts[0].x, padTop+chartH);
+      ctx.closePath();
+      ctx.globalAlpha = 0.18; ctx.fillStyle = colPrimary; ctx.fill(); ctx.globalAlpha = 1;
+
+      ctx.beginPath();
+      pts.forEach((p,i)=>{ if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
+      ctx.strokeStyle = colPrimary; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.stroke();
+
+      pts.forEach(p=>{
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+        ctx.fillStyle = colPrimary; ctx.fill();
+      });
+    } else {
+      const slot = chartW/totals.length;
+      const barW = slot*0.55;
+      totals.forEach((t,i)=>{
+        const x = padX + (i+0.5)*slot - barW/2;
+        const bh = Math.max(2, (t/max)*chartH);
+        const y = padTop + chartH - bh;
+        const r = 3;
+        ctx.beginPath();
+        ctx.moveTo(x+r, y);
+        ctx.arcTo(x+barW, y, x+barW, y+bh, r);
+        ctx.lineTo(x+barW, y+bh);
+        ctx.lineTo(x, y+bh);
+        ctx.arcTo(x, y, x+r, y, r);
+        ctx.closePath();
+        ctx.fillStyle = trendColor(t);
+        ctx.fill();
+      });
+    }
+
+    ctx.fillStyle = colFaint;
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.textAlign = 'center';
+    labels.forEach((l,i)=>{
+      const x = padX + (i+0.5)*(chartW/totals.length);
+      ctx.fillText(l, x, h-14);
+    });
+
+    canvasToPngDownload(canvas, 'last-14-days.png');
+  }
+  document.getElementById('btnExportTrendPng').addEventListener('click', exportTrendChartPNG);
+
+  function renderWeekCompare(){
+    const el = document.getElementById('weekCompare');
+    if(!el) return;
+    // This week = today back 6 days (7 days total); last week = the 7 days before that.
+    const thisStart = dateOffset(-6), thisEnd = dateOffset(0);
+    const lastStart = dateOffset(-13), lastEnd = dateOffset(-7);
+    const inRange = (ds, a, b) => ds >= a && ds <= b;
+
+    const thisSessions = data.sessions.filter(s=>inRange(s.date, thisStart, thisEnd));
+    const lastSessions = data.sessions.filter(s=>inRange(s.date, lastStart, lastEnd));
+    const thisMin = thisSessions.reduce((a,s)=>a+s.minutes,0);
+    const lastMin = lastSessions.reduce((a,s)=>a+s.minutes,0);
+    const thisTopics = new Set(thisSessions.filter(s=>s.topic).map(s=>s.subjectId+'::'+s.topic.toLowerCase())).size;
+    const lastTopics = new Set(lastSessions.filter(s=>s.topic).map(s=>s.subjectId+'::'+s.topic.toLowerCase())).size;
+
+    function deltaHtml(cur, prev, unit){
+      if(prev === 0 && cur === 0) return '<span class="wc-delta flat">— no change</span>';
+      if(prev === 0) return '<span class="wc-delta up">▲ new this week</span>';
+      const pct = Math.round((cur-prev)/prev*100);
+      if(pct === 0) return '<span class="wc-delta flat">— flat</span>';
+      const cls = pct > 0 ? 'up' : 'down';
+      const arrow = pct > 0 ? '▲' : '▼';
+      return `<span class="wc-delta ${cls}">${arrow} ${Math.abs(pct)}%${unit?(' '+unit):''}</span>`;
+    }
+
+    el.innerHTML = `
+      <div class="week-compare-grid">
+        <div class="wc-stat">
+          <div class="wc-label">Hours studied</div>
+          <span class="wc-value">${(thisMin/60).toFixed(1)}h</span>${deltaHtml(thisMin, lastMin)}
+          <div class="wc-label" style="margin-top:6px;">vs ${(lastMin/60).toFixed(1)}h last week</div>
+        </div>
+        <div class="wc-stat">
+          <div class="wc-label">Topics I covered</div>
+          <span class="wc-value">${thisTopics}</span>${deltaHtml(thisTopics, lastTopics)}
+          <div class="wc-label" style="margin-top:6px;">vs ${lastTopics} last week</div>
+        </div>
+      </div>`;
+  }
+
+  function heatColor(minutes){
+    if(minutes <= 0) return null; // use default empty color
+    const hrs = minutes/60;
+    if(hrs < 2) return '#2B5D3E';
+    if(hrs < 5) return '#2E8B57';
+    if(hrs < 8) return '#34C374';
+    return '#5EF08C';
+  }
+  const HEATMAP_WEEKS = 26; // ~6 months
+
+  function renderHeatmap(){
+    const wrap = document.getElementById('heatmapChart');
+    const legend = document.getElementById('heatmapLegend');
+    const months = document.getElementById('heatmapMonths');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+
+    const minutesByDate = {};
+    data.sessions.forEach(s=>{ minutesByDate[s.date] = (minutesByDate[s.date]||0) + s.minutes; });
+
+    // Build a day list ending today, padded at the start so the grid begins on a Sunday.
+    const totalDays = HEATMAP_WEEKS*7;
+    const end = new Date(); end.setHours(0,0,0,0);
+    const start = new Date(end); start.setDate(start.getDate() - (totalDays-1));
+    start.setDate(start.getDate() - start.getDay()); // rewind to Sunday
+
+    const days = [];
+    const cursor = new Date(start);
+    while(cursor <= end){ days.push(new Date(cursor)); cursor.setDate(cursor.getDate()+1); }
+    // pad end to complete the last week (Saturday)
+    while(days[days.length-1].getDay() !== 6){ const d = new Date(days[days.length-1]); d.setDate(d.getDate()+1); days.push(d); }
+
+    days.forEach(d=>{
+      const ds = localDateStr(d);
+      const isFuture = ds > todayStr();
+      const min = minutesByDate[ds] || 0;
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      if(!isFuture){
+        const c = heatColor(min);
+        if(c) cell.style.background = c;
+        cell.title = ds + ' — ' + (min ? formatDuration(min) : 'no study logged');
+      } else {
+        cell.style.visibility = 'hidden';
+      }
+      wrap.appendChild(cell);
+    });
+
+    // One label per week-column (the grid is column-major: each run of 7
+    // days is one column), placed on the first week that starts a new month.
+    if(months){
+      months.innerHTML = '';
+      let prevMonth = null;
+      for(let w=0; w<days.length/7; w++){
+        const firstDay = days[w*7];
+        const m = firstDay.getMonth();
+        const label = document.createElement('span');
+        if(m !== prevMonth){
+          label.textContent = firstDay.toLocaleDateString('en-US',{ month:'short' });
+          prevMonth = m;
+        }
+        months.appendChild(label);
+      }
+    }
+
+    if(legend){
+      legend.innerHTML = '';
+      [
+        [0, '0h'],
+        [90, '<2h'],
+        [240, '2–5h'],
+        [420, '5–8h'],
+        [540, '8h+'],
+      ].forEach(([m, label])=>{
+        const c = document.createElement('div');
+        c.className = 'heatmap-cell';
+        const color = heatColor(m);
+        if(color) c.style.background = color;
+        c.title = label;
+        legend.appendChild(c);
+      });
+    }
+  }
+
+  // Per-subject mock average (%), for every subject — null where the
+  // subject has no scored mock tests yet. Shared by the "where I need to
+  // improve" breakdown and the dashboard's gap/strength callouts.
+  function subjectMockAverages(){
+    return data.subjects.map(s=>{
+      const mocks = data.mockTests.filter(m=>m.subjectId===s.id && m.max>0);
+      const avgPct = mocks.length ? Math.round(mocks.reduce((a,m)=>a+(m.score/m.max*100),0)/mocks.length) : null;
+      return { subject: s, avgPct };
+    });
+  }
+
+  function renderSubjectInsights(){
+    const el = document.getElementById('subjectInsights');
+    if(!el) return;
+    const rows = subjectMockAverages().map(r=>{
+      const minutes = data.sessions.filter(x=>x.subjectId===r.subject.id).reduce((a,x)=>a+x.minutes,0);
+      return { subject: r.subject, avgPct: r.avgPct, minutes };
+    });
+    const scored = rows.filter(r=>r.avgPct !== null);
+    if(!scored.length){
+      el.innerHTML = '<div class="empty-note">Log a few subject-tagged mock tests to see this breakdown.</div>';
+      return;
+    }
+    const avgScoreAll = scored.reduce((a,r)=>a+r.avgPct,0) / scored.length;
+    const avgMinAll = rows.reduce((a,r)=>a+r.minutes,0) / rows.length;
+
+    const sorted = scored.slice().sort((a,b)=> a.avgPct - b.avgPct);
+    el.innerHTML = '';
+    sorted.forEach(r=>{
+      const flag = r.avgPct < avgScoreAll && r.minutes < avgMinAll;
+      const row = document.createElement('div');
+      row.className = 'list-row';
+      row.innerHTML = `<span>${escapeHtml(r.subject.name)}${flag ? ' <span class="topic-badge badge-weak" style="margin-left:6px;">Focus here</span>' : ''}</span><span style="display:flex;align-items:center;gap:12px;"><span class="cnt">${r.avgPct}%</span><span style="font-family:'JetBrains Mono',monospace;color:var(--ink-soft);font-size:12px;">${(r.minutes/60).toFixed(1)}h</span></span>`;
+      el.appendChild(row);
+    });
+  }
+
+  // Gap/strength subjects come from mock averages; next priority is an
+  // incomplete topic inside the gap subject (weak-tagged first, then
+  // high-weight, then whatever's first), falling back to the single most
+  // overdue revision if the gap subject has nothing left to complete.
+  function computeDashboardInsights(){
+    const scored = subjectMockAverages().filter(r=>r.avgPct !== null);
+    let gapSubject = null, strengthSubject = null;
+    if(scored.length){
+      const sorted = scored.slice().sort((a,b)=>a.avgPct-b.avgPct);
+      gapSubject = sorted[0].subject;
+      strengthSubject = sorted[sorted.length-1].subject;
+    }
+    let nextPriority = null;
+    if(gapSubject){
+      const incomplete = gapSubject.topics.filter(t=>!t.done);
+      const pick = incomplete.find(t=>t.priority==='weak') || incomplete.find(t=>t.priority==='high') || incomplete[0];
+      if(pick) nextPriority = pick.name;
+    }
+    if(!nextPriority){
+      const due = dueTopics();
+      if(due.length) nextPriority = due[0].topic.name;
+    }
+    return { gapSubject, strengthSubject, nextPriority };
+  }
+
+  function renderDashboard(){
+    const grid = document.getElementById('dashStatGrid');
+    if(!grid) return;
+
+    const totalMin = data.sessions.reduce((a,s)=>a+s.minutes,0);
+    const totalTopics = data.subjects.reduce((a,s)=>a+s.topics.length,0);
+    const doneTopics = data.subjects.reduce((a,s)=>a+s.topics.filter(t=>t.done).length,0);
+    const syllabusPct = totalTopics ? Math.round(doneTopics/totalTopics*100) : 0;
+
+    const dueCount = dueTopics().length;
+    const revisionHealth = doneTopics ? Math.round((doneTopics-dueCount)/doneTopics*100) : null;
+
+    const scoredMocks = data.mockTests.filter(m=>m.max>0);
+    const mockAvg = scoredMocks.length ? Math.round(scoredMocks.reduce((a,m)=>a+(m.score/m.max*100),0)/scoredMocks.length) : null;
+
+    const totalAnswers = data.answerLogs.reduce((a,l)=>a+l.count,0);
+
+    grid.innerHTML = `
+      <div class="stat-card"><div class="v">${consistencyScore()}%</div><div class="l">Consistency</div></div>
+      <div class="stat-card"><div class="v">${Math.round(totalMin/60)}h</div><div class="l">Study hours</div></div>
+      <div class="stat-card"><div class="v">${syllabusPct}%</div><div class="l">Syllabus</div></div>
+      <div class="stat-card"><div class="v">${revisionHealth===null ? '—' : revisionHealth+'%'}</div><div class="l">Revision health</div></div>
+      <div class="stat-card"><div class="v">${mockAvg===null ? '—' : mockAvg+'%'}</div><div class="l">Mock average</div></div>
+      <div class="stat-card"><div class="v">${totalAnswers}</div><div class="l">Answer writing${totalAnswers ? ' <span style="font-size:11px;font-weight:400;color:var(--ink-faint);">answers</span>' : ''}</div></div>
+    `;
+
+    const { gapSubject, strengthSubject, nextPriority } = computeDashboardInsights();
+    const insights = document.getElementById('dashInsights');
+    if(!gapSubject && !nextPriority){
+      insights.innerHTML = '<div class="empty-note">Log a few subject-tagged mock tests and topics to see this.</div>';
+      return;
+    }
+    let rows = '';
+    if(gapSubject){
+      rows += `<div class="dash-insight-row tone-gap"><span class="lbl">Current biggest gap</span><span class="val">${escapeHtml(gapSubject.name)}</span></div>`;
+    }
+    if(strengthSubject){
+      rows += `<div class="dash-insight-row tone-strength"><span class="lbl">Current biggest strength</span><span class="val">${escapeHtml(strengthSubject.name)}</span></div>`;
+    }
+    if(nextPriority){
+      rows += `<div class="dash-insight-row tone-priority"><span class="lbl">Next priority</span><span class="val">${escapeHtml(nextPriority)}</span></div>`;
+    }
+    insights.innerHTML = rows;
+  }
+
+  function renderOverview(){
+    const totalMin = data.sessions.reduce((a,s)=>a+s.minutes,0);
+    const totalTopics = data.subjects.reduce((a,s)=>a+s.topics.length,0);
+    const doneTopics = data.subjects.reduce((a,s)=>a+s.topics.filter(t=>t.done).length,0);
+    const days = new Set(data.sessions.map(s=>s.date)).size;
+    const consistency = consistencyScore();
+    const consistencyColor = consistency >= 70 ? 'var(--success)' : consistency >= 40 ? 'var(--yellow)' : 'var(--danger)';
+
+    const statGrid = document.getElementById('statGrid');
+    statGrid.innerHTML = `
+      <div class="stat-card"><div class="v">${(totalMin/60).toFixed(1)}</div><div class="l">Hours invested</div></div>
+      <div class="stat-card"><div class="v">${days}</div><div class="l">Days I showed up</div></div>
+      <div class="stat-card"><div class="v">${doneTopics}/${totalTopics}</div><div class="l">Topics completed</div></div>
+      <div class="stat-card"><div class="v">${data.subjects.length}</div><div class="l">Subjects tracked</div></div>
+      <div class="stat-card" title="% of the last ${CONSISTENCY_WINDOW_DAYS} days meeting the ${streakThresholdLabel(STREAK_THRESHOLD_MINUTES)} threshold"><div class="v" style="color:${consistencyColor};">${consistency}%</div><div class="l">My consistency (${CONSISTENCY_WINDOW_DAYS}d)</div></div>
+    `;
+
+    renderTrend();
+    renderWeekCompare();
+    renderHeatmap();
+    renderSubjectInsights();
+    renderSubjectChart();
+  }
+
+  function renderSubjectChart(){
+    const wrap = document.getElementById('subjectBars');
+    wrap.innerHTML = '';
+    document.querySelectorAll('#subjectChartToggle .chart-toggle-btn').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.type === (data.subjectChartType || 'bar'));
+    });
+    if(!data.subjects.length){ wrap.innerHTML = '<div class="empty-note">Add subjects to see a breakdown here.</div>'; return; }
+
+    const subjMin = data.subjects.map(s => data.sessions.filter(x=>x.subjectId===s.id).reduce((a,x)=>a+x.minutes,0));
+    const totalMin = subjMin.reduce((a,b)=>a+b,0);
+
+    if((data.subjectChartType || 'bar') === 'donut'){
+      if(totalMin <= 0){ wrap.innerHTML = '<div class="empty-note">Log some study time to see a breakdown here.</div>'; return; }
+      const size = 160, stroke = 22, r = (size-stroke)/2, c = 2*Math.PI*r;
+      let offset = 0;
+      const segs = data.subjects.map((s,i)=>{
+        const min = subjMin[i];
+        if(min <= 0) return '';
+        const frac = min/totalMin;
+        const dash = frac*c;
+        const seg = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${BAR_COLORS[i % BAR_COLORS.length]}" stroke-width="${stroke}" stroke-dasharray="${dash.toFixed(2)} ${(c-dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${size/2} ${size/2})"><title>${escapeHtml(s.name)} — ${(min/60).toFixed(1)}h (${Math.round(frac*100)}%)</title></circle>`;
+        offset += dash;
+        return seg;
+      }).join('');
+      const legend = data.subjects.map((s,i)=>{
+        const min = subjMin[i];
+        if(min <= 0) return '';
+        const pct = Math.round(min/totalMin*100);
+        return `<div class="bar-row" style="margin-bottom:8px;"><div class="name" style="width:auto; flex:1; display:flex; align-items:center; gap:8px;"><span style="width:9px;height:9px;border-radius:2px;background:${BAR_COLORS[i % BAR_COLORS.length]};display:inline-block;flex-shrink:0;"></span>${escapeHtml(s.name)}</div><div class="mins" style="width:auto;">${(min/60).toFixed(1)}h · ${pct}%</div></div>`;
+      }).join('');
+      wrap.innerHTML = `<div style="display:flex; gap:22px; flex-wrap:wrap; align-items:center;">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0;">${segs}</svg>
+        <div style="flex:1; min-width:160px;">${legend}</div>
+      </div>`;
+      return;
+    }
+
+    const maxMin = Math.max(1, ...subjMin);
+    data.subjects.forEach((s,i)=>{
+      const min = subjMin[i];
+      const pct = Math.round(min/maxMin*100);
+      const color = BAR_COLORS[i % BAR_COLORS.length];
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = `<div class="name">${escapeHtml(s.name)}</div><div class="track"><div class="fill" style="width:${pct}%;background:${color}"></div></div><div class="mins">${(min/60).toFixed(1)}h</div>`;
+      wrap.appendChild(row);
+    });
+  }
+  document.querySelectorAll('#subjectChartToggle .chart-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(data.subjectChartType === btn.dataset.type) return;
+      data.subjectChartType = btn.dataset.type;
+      renderSubjectChart();
+      await save();
+    });
+  });
+
+  // ---------- Motivational quote ----------
+  function renderQuote(){
+    const card = document.getElementById('quoteCard');
+    document.getElementById('quoteText').textContent = '“' + data.quote + '”';
+    card.querySelectorAll('.quote-edit-block').forEach(el=>el.remove());
+    document.getElementById('quoteText').classList.remove('hidden');
+    document.getElementById('btnEditQuote').classList.remove('hidden');
+  }
+  document.getElementById('btnEditQuote').addEventListener('click', ()=>{
+    const card = document.getElementById('quoteCard');
+    document.getElementById('quoteText').classList.add('hidden');
+    document.getElementById('btnEditQuote').classList.add('hidden');
+    const block = document.createElement('div');
+    block.className = 'quote-edit-block'; block.style.flex = '1';
+    const textarea = document.createElement('textarea'); textarea.value = data.quote;
+    const actions = document.createElement('div'); actions.className = 'quote-edit-actions';
+    const saveBtn = document.createElement('button'); saveBtn.className = 'btn-primary'; saveBtn.textContent = 'Save';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-ghost'; cancelBtn.textContent = 'Cancel';
+    saveBtn.addEventListener('click', async ()=>{ const v = textarea.value.trim(); data.quote = v || DEFAULT_QUOTE; await save(); renderQuote(); });
+    cancelBtn.addEventListener('click', renderQuote);
+    actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+    block.appendChild(textarea); block.appendChild(actions);
+    card.appendChild(block); textarea.focus();
+  });
+
+  function renderAll(){
+    applyTheme();
+    refreshSubjectSelects();
+    renderLog();
+    renderSubjects();
+    renderCountdown();
+    renderUpsc();
+    renderOverview();
+    renderQuote();
+    renderToday();
+    renderDailyGoalSetting();
+    renderDashboard();
+    renderOptional();
+  }
+
+  document.getElementById('dailyGoalSelect').addEventListener('change', async ()=>{
+    const sel = document.getElementById('dailyGoalSelect');
+    const custom = document.getElementById('dailyGoalCustomInput');
+    if(sel.value === 'custom'){
+      custom.classList.remove('hidden');
+      custom.value = (getDailyGoal()/60);
+      custom.focus();
+      return;
+    }
+    custom.classList.add('hidden');
+    data.dailyGoalMinutes = parseInt(sel.value, 10);
+    await save();
+    renderDailyGoal(); renderToday();
+  });
+  document.getElementById('dailyGoalCustomInput').addEventListener('change', async ()=>{
+    const input = document.getElementById('dailyGoalCustomInput');
+    let hrs = parseFloat(input.value);
+    if(!hrs || hrs <= 0){ flashInvalid(input); input.value = (getDailyGoal()/60); return; }
+    hrs = Math.min(24, hrs);
+    data.dailyGoalMinutes = Math.round(hrs*60);
+    await save();
+    renderDailyGoal(); renderToday();
+  });
+
+  function applyTheme(){
+    document.body.setAttribute('data-theme', data.theme);
+    document.getElementById('btnThemeToggle').textContent = data.theme === 'light' ? '☀️' : '🌙';
+  }
+  document.querySelectorAll('#trendChartToggle .chart-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(data.trendChartType === btn.dataset.type) return;
+      data.trendChartType = btn.dataset.type;
+      renderTrend();
+      await save();
+    });
+  });
+  document.getElementById('btnThemeToggle').addEventListener('click', async ()=>{
+    data.theme = data.theme === 'light' ? 'dark' : 'light';
+    applyTheme();
+    await save();
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

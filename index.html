@@ -6,15 +6,17 @@
 <title>Prep for AIR-1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Firebase SDK v10 (modular, CDN) -->
-<script type="module">
+
+<!-- Firebase Compat SDK (synchronous regular scripts — no module timing issues) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
   // ═══════════════════════════════════════════════════════════════════
-  // STEP 1: Paste YOUR Firebase project config here.
-  //         Go to: Firebase Console → Your Project → Project Settings
-  //         → "Your apps" → Config (the firebaseConfig object).
-  //         Replace every value below with yours.
+  // Paste YOUR Firebase project config here.
+  // Firebase Console → Your Project → Project Settings → Your apps → Config
   // ═══════════════════════════════════════════════════════════════════
-  const FIREBASE_CONFIG = {
+  var FIREBASE_CONFIG = {
     apiKey:            "AIzaSyDAHtCawwdZt90zbygH_M4nG0nJ4JnQAnU",
     authDomain:        "prepforair1.firebaseapp.com",
     projectId:         "prepforair1",
@@ -24,82 +26,80 @@
     measurementId:     "G-HDNXPVGNPE"
   };
 
-  import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-  import { getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  // Document path where all data is stored in Firestore.
+  var DOC_PATH = 'users/priyanshu/tracker';
+  var LS_KEY   = 'prep-register-data';
 
-  // Only initialise if the user has filled in real config values.
-  const isConfigured = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('PASTE');
+  var isConfigured = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('PASTE');
 
-  let db = null;
+  var db = null;
   if(isConfigured){
     try{
-      const app = initializeApp(FIREBASE_CONFIG);
-      db = getFirestore(app);
-      // Enable offline persistence so saves still work when no internet.
-      enableIndexedDbPersistence(db).catch(()=>{});
+      // Avoid "app already exists" error on hot reloads.
+      var fbApp = firebase.apps.length
+        ? firebase.app()
+        : firebase.initializeApp(FIREBASE_CONFIG);
+      db = fbApp.firestore();
+      // Enable offline persistence so saves buffer when there's no internet.
+      db.enablePersistence({ synchronizeTabs: true }).catch(function(e){
+        console.warn('Firestore persistence unavailable:', e.code);
+      });
+      console.log('[Firebase] Firestore ready, db =', db);
     }catch(e){
-      console.warn('Firebase init failed', e);
+      console.error('[Firebase] Init error:', e);
+      db = null;
     }
+  } else {
+    console.log('[Firebase] Config not set — using localStorage only.');
   }
 
-  // Document path in Firestore: users/{USER_ID}/tracker
-  // STEP 2: You can change "priyanshu" below to any word you like.
-  //         It's just an identifier for your data document.
-  const DOC_PATH = 'users/priyanshu/tracker';
-  const LS_KEY   = 'prep-register-data';       // local backup key
-
   function setSyncBadge(state){
-    // state: 'synced' | 'saving' | 'offline' | 'local'
-    const badge = document.getElementById('syncBadge');
+    var badge = document.getElementById('syncBadge');
     if(!badge) return;
-    const map = {
-      synced:  { text: '☁ Synced',  cls: 'badge-synced'  },
-      saving:  { text: '↑ Saving…', cls: 'badge-saving'  },
-      offline: { text: '⚠ Offline', cls: 'badge-offline' },
-      local:   { text: '💾 Local',  cls: 'badge-local'   },
+    var map = {
+      synced:  { text: '\u2601 Synced',  cls: 'badge-synced'  },
+      saving:  { text: '\u2191 Saving\u2026', cls: 'badge-saving' },
+      offline: { text: '\u26a0 Offline', cls: 'badge-offline' },
+      local:   { text: '\ud83d\udcbe Local', cls: 'badge-local'   },
     };
-    const cfg = map[state] || map.local;
+    var cfg = map[state] || map.local;
     badge.textContent = cfg.text;
     badge.className   = 'sync-badge ' + cfg.cls;
   }
 
-  // Expose a storage object that the rest of the app uses.
   window.appStorage = {
-    async get(key){
-      // Try Firestore first; fall back to localStorage.
+    get: async function(key){
       if(db){
         try{
-          const snap = await getDoc(doc(db, DOC_PATH));
-          if(snap.exists()){
-            const val = snap.data()[key];
+          var snap = await db.doc(DOC_PATH).get();
+          if(snap.exists){
+            var val = snap.data()[key];
             if(val !== undefined){
-              // Keep localStorage in sync as offline cache.
               try{ localStorage.setItem(LS_KEY, val); }catch(_){}
               setSyncBadge('synced');
               return val;
             }
           }
+          // Doc exists in Firestore but key not found yet — still synced.
+          setSyncBadge('synced');
         }catch(e){
-          console.warn('Firestore read failed, using localStorage', e);
+          console.warn('[Firebase] Read failed, using localStorage:', e);
           setSyncBadge('offline');
         }
       } else {
         setSyncBadge('local');
       }
-      // Fallback: localStorage
       return localStorage.getItem(LS_KEY);
     },
-    async set(key, value){
-      // Always write to localStorage immediately (instant, offline-safe).
+    set: async function(key, value){
       try{ localStorage.setItem(LS_KEY, value); }catch(_){}
-      // Then push to Firestore if configured.
       if(db){
         setSyncBadge('saving');
         try{
-          await setDoc(doc(db, DOC_PATH), { [key]: value }, { merge: true });
+          await db.doc(DOC_PATH).set({ [key]: value }, { merge: true });
           setSyncBadge('synced');
         }catch(e){
-          console.warn('Firestore write failed (will retry when online)', e);
+          console.warn('[Firebase] Write failed (buffered for retry):', e);
           setSyncBadge('offline');
         }
       } else {
@@ -108,8 +108,8 @@
     }
   };
 
-  // Signal to the main script that Firebase is ready.
-  document.dispatchEvent(new CustomEvent('storageReady'));
+  console.log('[Firebase] window.appStorage ready. db =', db ? 'connected' : 'null');
+})();
 </script>
 <style>
   :root{
@@ -3580,16 +3580,9 @@
     await save();
   });
 
-  // Wait for the Firebase module to finish initializing before loading data.
-  // Falls back after 4 seconds in case the module never fires (e.g. ad blocker).
-  function waitForStorage(cb){
-    if(window.appStorage){ cb(); return; }
-    let fired = false;
-    const done = () => { if(!fired){ fired = true; cb(); } };
-    document.addEventListener('storageReady', done, { once: true });
-    setTimeout(done, 4000);
-  }
-  waitForStorage(() => load());
+  // window.appStorage is set synchronously by the Firebase compat script
+  // in <head>, so it is always available here — just call load() directly.
+  load();
 })();
 </script>
 </body>
